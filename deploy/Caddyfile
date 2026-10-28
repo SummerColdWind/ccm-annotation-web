@@ -1,0 +1,8 @@
+{$CCM_DOMAIN} {
+    encode gzip zstd
+    request_body {
+        max_size 32KB
+    }
+    reverse_proxy web:8000
+    header Strict-Transport-Security "max-age=31536000"
+}

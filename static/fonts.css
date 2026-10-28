@@ -1,0 +1,17 @@
+/* Noto Sans SC, SIL Open Font License 1.1; see fonts/OFL.txt. */
+@font-face {
+  font-family: "CCM UI Sans";
+  src: url('/static/fonts/ccm-ui-sans.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Noto Serif SC, SIL Open Font License 1.1; see fonts/OFL-serif.txt. */
+@font-face {
+  font-family: "CCM UI Serif";
+  src: url('/static/fonts/ccm-ui-serif.woff2') format('woff2');
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}

@@ -1,0 +1,45 @@
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${CCM_PORT:-8000}:8000"
+    environment:
+      CCM_DB: /data/ccm.sqlite3
+      CCM_IMAGE_ROOT: /images
+      CCM_SECURE_COOKIE: ${CCM_SECURE_COOKIE:-1}
+      CCM_PUBLIC_ORIGIN: ${CCM_PUBLIC_ORIGIN:-https://ccm.example.com}
+    volumes:
+      - ccm_data:/data
+      - type: bind
+        source: ${IMAGE_FOLDER:?Set IMAGE_FOLDER in .env}
+        target: /images
+        read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m
+  caddy:
+    image: caddy:2
+    profiles: [https]
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      CCM_DOMAIN: ${CCM_DOMAIN:-ccm.example.com}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+volumes:
+  ccm_data:
+  caddy_data:
+  caddy_config:
