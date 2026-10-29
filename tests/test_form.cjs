@@ -3,9 +3,9 @@ const assert = require('node:assert/strict');
 const form = require('../static/annotation-form.js');
 const pure = () => ({q1:{a:null},q2:'a',q3:['n'],q3_details:{}});
 
-test('Q2 accepts all five grades including both intermediate choices',()=>{
-  for(const q2 of ['a','ab','b','bc','c']) assert.equal(form.problem({...pure(),q2}),'');
-  for(const q2 of [null,'d','n']) assert.match(form.problem({...pure(),q2}),/Q2/);
+test('Q2 accepts three grades and rejects removed intermediate choices',()=>{
+  for(const q2 of ['a','b','c']) assert.equal(form.problem({...pure(),q2}),'');
+  for(const q2 of [null,'d','n','ab','bc']) assert.match(form.problem({...pure(),q2}),/Q2/);
 });
 
 test('single SBNP needs no area; mixed regions need every area and skip later questions',()=>{

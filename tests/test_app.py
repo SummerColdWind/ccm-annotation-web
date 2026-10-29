@@ -128,12 +128,12 @@ def test_previous_navigation_preserves_order_drafts_and_audit(env):
     assert submit(client,first).status_code==200
     second=next_task(client)
     assert second['previous_id']==first['id'] and second['next_id']==ids[2]
-    partial={'q1':{'a':None},'q2':'bc','q3':[],'q3_details':{}}
+    partial={'q1':{'a':None},'q2':'c','q3':[],'q3_details':{}}
     assert client.put(f"/api/tasks/{second['id']}/draft",json={
         'labels':partial,'revision':second['revision'],'manual_version':MANUAL_VERSION}).status_code==200
     previous=client.get(f"/api/tasks/{second['previous_id']}").json()
     assert previous['submitted'] and previous['labels']==VALID
-    assert submit(client,previous,{**VALID,'q2':'ab'}).status_code==200
+    assert submit(client,previous,{**VALID,'q2':'b'}).status_code==200
     restored=client.get(f"/api/tasks/{previous['next_id']}").json()
     assert restored['id']==second['id'] and restored['has_draft'] and restored['labels']==partial
     assert client.get('/api/progress').json()['completed']==1
@@ -327,14 +327,24 @@ def test_single_layer_has_no_area(layer):
         assert labels['q2']=='n' and labels['q3'] is None
 
 
-@pytest.mark.parametrize('grade', ['a','ab','b','bc','c'])
-def test_q2_five_grades(env, grade):
+@pytest.mark.parametrize('grade', ['a','b','c'])
+def test_q2_three_grades(env, grade):
     assert normalize({**VALID,'q2':grade},True)['q2']==grade
     did=activate(env); client=env['clients']['alice']; task=next_task(client)
     assert submit(client,task,{**VALID,'q2':grade}).status_code==200
     assert client.get(f"/api/tasks/{task['id']}").json()['labels']['q2']==grade
     record=json.loads(env['clients']['admin'].get(f'/api/admin/export?dataset_id={did}&format=jsonl').text)
     assert record['q2']==grade and record['manual_version']==MANUAL_VERSION
+
+
+@pytest.mark.parametrize('grade', ['ab','bc'])
+def test_q2_removed_intermediate_grades_cannot_be_saved(env, grade):
+    activate(env); client=env['clients']['alice']; task=next_task(client)
+    body={'labels':{**VALID,'q2':grade},'revision':task['revision'],'manual_version':MANUAL_VERSION}
+    assert client.put(f"/api/tasks/{task['id']}/draft",json=body).status_code==422
+    assert client.post(f"/api/tasks/{task['id']}/submit",json=body).status_code==422
+    restored=client.get(f"/api/tasks/{task['id']}").json()
+    assert restored['revision']==task['revision'] and not restored['has_draft'] and not restored['submitted']
 
 
 @pytest.mark.parametrize('immune', ['f1','f2','f3'])
@@ -354,8 +364,8 @@ def test_rules_and_removed_manual_routes(env):
     client=env['clients']['alice']
     rules=client.get('/api/rules').json()
     assert rules['version']==MANUAL_VERSION and 'q4' not in rules
-    assert rules['version']=='20261029-r4'
-    assert [(o['id'],o['name']) for o in rules['q2']]==[('a','良'),('ab','良–中'),('b','中'),('bc','中–差'),('c','差')]
+    assert rules['version']=='20261029-r5'
+    assert [(o['id'],o['name']) for o in rules['q2']]==[('a','良'),('b','中'),('c','差')]
     immune=next(o for o in rules['q3'] if o['id']=='f')
     assert [(o['id'],o['detail']) for o in immune['options']]==[('f1','<5个'),('f2','5–20个'),('f3','>20个')]
     assert immune['multiple'] is False
@@ -367,17 +377,17 @@ def test_rules_and_removed_manual_routes(env):
     assert client.get('/api/health').json()['manual_version']==MANUAL_VERSION
 
 
-@pytest.mark.parametrize('draft_version', [None,'20261029','20261029-r2','20261029-r3'])
+@pytest.mark.parametrize('draft_version', [None,'20261029','20261029-r2','20261029-r3','20261029-r4'])
 def test_old_drafts_are_not_reinterpreted_and_old_clients_cannot_write(env, draft_version):
     activate(env); client=env['clients']['alice']; task=next_task(client)
     old={'q1':{'a':'k'},'q2':'c','q3':'b','q4':['n']} if draft_version is None else {
-        'q1':{'a':None},'q2':'b','q3':['f'],'q3_details':{'f':'f2'}}
+        'q1':{'a':None},'q2':'ab' if draft_version=='20261029-r4' else 'b','q3':['f'],'q3_details':{'f':'f2'}}
     with connect(env['db']) as db:
         db.execute('UPDATE assignments SET draft=?,draft_version=?,revision=7 WHERE id=?',(json.dumps(old),draft_version,task['id']))
     current=next_task(client)
     assert current['draft_reset'] and not current['has_draft'] and current['revision']==7
     assert current['labels']=={'q1':{},'q2':None,'q3':[],'q3_details':{}}
-    for version in (None,'20261027','20261029','20261029-r2','20261029-r3'):
+    for version in (None,'20261027','20261029','20261029-r2','20261029-r3','20261029-r4'):
         body={'labels':VALID,'revision':7,'manual_version':version}
         assert client.put(f"/api/tasks/{task['id']}/draft",json=body).status_code==409
         assert client.post(f"/api/tasks/{task['id']}/submit",json=body).status_code==409
@@ -404,6 +414,10 @@ def test_legacy_schema_adds_draft_version_without_losing_accounts(tmp_path, hash
      {'q2':'b','q3':'e;f','q3_overlap':'e1;e2','q3_immune':'f2'}),
     ('20261029-r3',{'q1':{'a':None},'q2':'b','q3':['e','f'],'q3_details':{'e':['e1','e2'],'f':'f3'}},
      {'q2':'b','q3':'e;f','q3_overlap':'e1;e2','q3_immune':'f3'}),
+    ('20261029-r4',{'q1':{'a':None},'q2':'ab','q3':['e','f'],'q3_details':{'e':['e1','e2'],'f':'f3'}},
+     {'q2':'ab','q3':'e;f','q3_overlap':'e1;e2','q3_immune':'f3'}),
+    ('20261029-r4',{'q1':{'a':None},'q2':'bc','q3':['n'],'q3_details':{}},
+     {'q2':'bc','q3':'n','q3_overlap':'','q3_immune':''}),
 ])
 def test_legacy_formal_record_is_preserved_for_export(env, version, old, expected):
     did=activate(env); client=env['clients']['alice']; task=next_task(client)
