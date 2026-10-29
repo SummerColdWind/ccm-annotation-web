@@ -26,8 +26,10 @@ test('both overlap cell types may be selected; deselecting parent clears them',(
 });
 test('immune count is mandatory and mutually exclusive',()=>{
   const labels=pure(); form.toggleInterference(labels,'f'); assert.match(form.problem(labels),/数量/);
-  form.toggleDetail(labels,'f','f1'); form.toggleDetail(labels,'f','f2');
-  assert.equal(labels.q3_details.f,'f2'); assert.equal(form.problem(labels),'');
+  for(const value of ['f1','f2','f3','f1']) {
+    form.toggleDetail(labels,'f',value);
+    assert.equal(labels.q3_details.f,value); assert.equal(form.problem(labels),'');
+  }
 });
 test('none clears all interference details; mixed layers clear all later answers',()=>{
   const labels=pure(); form.toggleInterference(labels,'e'); form.toggleDetail(labels,'e','e1');

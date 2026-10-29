@@ -75,7 +75,7 @@ function renderQuestions() {
   const skipped=keys.length?'已跳过 · Q1 包含非 SBNP 层面或区域':'先完成 Q1';
   const details=(option)=>{
     if(!option.options || !interference.includes(option.id) || disabled) return '';
-    return `<div class="factor-details" role="group" aria-label="${esc(option.name)}细分">${option.options.map(sub=>{
+    return `<div class="factor-details" data-detail-group="${option.id}" role="group" aria-label="${esc(option.name)}细分">${option.options.map(sub=>{
       const selected=option.multiple?(labels.q3_details.e || []).includes(sub.id):labels.q3_details.f===sub.id;
       return `<button type="button" class="choice detail-choice ${selected?'selected':''}" data-detail="${sub.id}" data-group="${option.id}" aria-pressed="${selected}">${esc(sub.name)}${sub.detail?` <span>${esc(sub.detail)}</span>`:''}</button>`;
     }).join('')}</div>`;
