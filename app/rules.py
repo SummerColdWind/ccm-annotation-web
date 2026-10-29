@@ -1,5 +1,5 @@
 """Annotation rules from cookbook/操作手册20261029.md (three-question revision)."""
-MANUAL_VERSION = "20261029-r3"
+MANUAL_VERSION = "20261029-r4"
 LAYERS = [
     {"id": "a", "name": "基底下神经丛（SBNP）层", "hint": "高反光、细长的线状或串珠状神经，可有弯曲、分叉及连接。同一区域出现 SBNP 与相邻层面重叠时，只计为 SBNP。"},
     {"id": "b", "name": "角膜上皮细胞层", "hint": "密集排列的多边形细胞，呈网格状或铺路石样；与 SBNP 重叠的区域不重复计入。"},
@@ -9,7 +9,9 @@ LAYERS = [
 AREAS = [{"id": "i", "name": "少量", "detail": "<10%"}, {"id": "j", "name": "中量", "detail": "10%–50%"}, {"id": "k", "name": "大量", "detail": ">50%"}]
 Q2 = [
     {"id": "a", "name": "良", "hint": "神经总体对比度良好，大多数神经可被可靠追踪。"},
-    {"id": "b", "name": "中", "hint": "神经总体对比度一般，或局部区域存在影响神经追踪的干扰因素，使得部分神经节段模糊或不可见，无法完成可靠追踪。"},
+    {"id": "ab", "name": "良–中", "hint": "可追踪性介于“良”和“中”之间。"},
+    {"id": "b", "name": "中", "hint": "神经总体对比度一般，或局部区域存在影响神经追踪的干扰因素，使得部分神经节段模糊或不可见，无法完成可靠追踪，尤其是图像边缘及角落区域。"},
+    {"id": "bc", "name": "中–差", "hint": "可追踪性介于“中”和“差”之间。"},
     {"id": "c", "name": "差", "hint": "神经总体对比度较差，或广泛区域存在影响神经追踪的干扰因素，大多数神经模糊或不可见，无法完成可靠追踪。"},
 ]
 Q3 = [
@@ -38,8 +40,8 @@ def normalize(payload, final=False):
         raise ValueError("选择多个层面时，请为每个层面选择面积")
     result = {"q1": {k: v if len(q1) > 1 else None for k, v in sorted(q1.items())}}
     q2, q3, details = payload.get("q2"), payload.get("q3"), payload.get("q3_details", {})
-    if q2 not in (None, "a", "b", "c", "n"):
-        raise ValueError("Q2 只能选择良、中、差")
+    if q2 not in (None, "a", "ab", "b", "bc", "c", "n"):
+        raise ValueError("Q2 请选择良、良–中、中、中–差或差")
     if q3 is not None and (not isinstance(q3, list) or any(x not in ("a", "b", "c", "d", "e", "f", "g", "n") for x in q3) or len(q3) != len(set(q3))):
         raise ValueError("Q3 干扰因素选项无效")
     if not isinstance(details, dict) or set(details) - {"e", "f"}:

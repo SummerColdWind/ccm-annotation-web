@@ -32,11 +32,10 @@ nav { align-self:center; gap:10px; }
 main { max-width:1680px; min-height:calc(100vh - 78px); padding:24px 3.3% 25px; }
 .page-heading { min-height:78px; margin-bottom:23px; gap:30px; }
 .page-heading h1 { margin:0; font-family:Georgia,'SimSun',serif; font-size:43px; font-weight:800; letter-spacing:1px; color:#492613; text-shadow:1px 1px #fff9e8; }
-#work-view .page-heading h1 { font-family:"CCM UI Serif",Georgia,'SimSun',serif; font-weight:900; font-synthesis:none; }
-.progress-card { width:435px; padding:0; background:none; font-size:15px; }
+.progress-card { width:auto; margin:4px 18px 18px; padding:0; background:none; font-size:15px; }
 .progress-card>div { margin:0 0 8px; color:#49341f; }
-.progress-card>div span { max-width:315px; }
-.progress-card b { color:#49341f; font-weight:600; }
+.progress-card>div span { max-width:none; min-width:0; flex:1; }
+.progress-card b { color:#49341f; font-weight:600; flex-shrink:0; }
 progress { display:block; height:17px; border:1px solid #b8ad92; border-radius:10px; overflow:hidden; background:#e6dfd0; box-shadow:inset 0 1px 2px #796a4d14; }
 progress::-webkit-progress-bar { background:#e6dfd0; }
 progress::-webkit-progress-value { background:#638c57; border-right:1px solid #365b32; box-shadow:inset 0 1px #9cba7e; }
@@ -78,7 +77,6 @@ progress::-moz-progress-bar { background:#638c57; }
 .image-tools .ui-icon { width:20px; height:20px; }
 #zoom-out,#zoom-in { padding:0 10px; font-size:22px; }
 #zoom-label { min-width:52px; color:#4b3824; font-size:15px; }
-.image-caption { padding:0 18px 11px; color:#71644e; font-size:11px; }
 .observation-note { background:none; border:0; border-top:1px solid #d8c39a; margin:7px 18px 10px; padding:11px 0 0; color:#74634b; font-size:12px; line-height:1.6; }
 .observation-note>span { font-size:19px; line-height:1.2; }
 .observation-note p { margin:0; }
@@ -225,7 +223,7 @@ progress::-moz-progress-bar { background:#638c57; }
   main { padding:22px 22px 28px; }
   .page-heading { min-height:0; margin-bottom:22px; }
   .page-heading h1 { font-size:33px; }
-  .progress-card { width:255px; font-size:12px; }
+  .progress-card { font-size:12px; }
   progress { height:12px; }
   .workspace { grid-template-columns:1fr; gap:20px; }
   .image-stage { aspect-ratio:1.2; max-height:70vh; }
@@ -250,7 +248,7 @@ progress::-moz-progress-bar { background:#638c57; }
   .nav .ui-icon { width:17px; height:17px; }
   .page-heading { gap:14px; margin-bottom:18px; }
   .page-heading h1 { font-size:29px; }
-  .progress-card { width:100%; font-size:12px; }
+  .progress-card { margin:4px 10px 16px; }
   .panel { border-width:10px; }
   .panel:before { inset:-9px; border-width:23px; border-image-width:23px; }
   .panel:after { width:27px; height:29px; background-size:25px; }
@@ -268,7 +266,6 @@ progress::-moz-progress-bar { background:#638c57; }
   .image-tools .ui-icon { width:16px; height:16px; }
   #zoom-label { font-size:12px; min-width:35px; }
   #zoom-out,#zoom-in { font-size:19px; padding:0 7px; }
-  .image-caption { font-size:9px; padding:0 10px 7px; }
   .observation-note { margin:7px 10px 9px; font-size:10px; padding-top:8px; gap:6px; }
   .observation-note small { font-size:9px; }
   #questions { padding:0 11px; }

@@ -39,7 +39,6 @@ async function refreshProgress() {
   $('#dataset-name').textContent=data.dataset?.name || '等待管理员启用图像集';
   $('#progress-count').textContent=`${data.completed} / ${data.total}`;
   $('#progress-bar').max=data.total || 1; $('#progress-bar').value=data.completed;
-  $('#progress-caption').textContent='我的标注进度 · 独立随机顺序';
 }
 async function nextTask() {
   const data=await api('/api/tasks/next',{method:'POST'});
@@ -55,9 +54,7 @@ function loadTask(task) {
   $('#dataset-name').textContent=task.dataset_name;
   if(task.submitted) {
     $('#progress-count').textContent='历史记录'; $('#progress-bar').max=1; $('#progress-bar').value=1;
-    $('#progress-caption').textContent='正在回看 · 保存后返回当前图像集';
   }
-  $('#image-dimensions').textContent=`${task.width} × ${task.height} px · 原始图像`;
   $('#save-status').textContent=task.draft_reset?'规则已更新，请重新填写':task.has_draft?'已恢复草稿':task.submitted?'正在修改已提交记录':'等待标注';
   $('#image-loading').hidden=false; $('#image-loading').textContent='正在载入原图…';
   $('#specimen').style.visibility='hidden'; panX=panY=0;
@@ -89,7 +86,7 @@ function renderQuestions() {
   </section>
   <section class="question grade-question q2-question ${disabled?'disabled':''}">
     <div class="question-title"><span class="q-number">Q2</span><h2>SBNP 可追踪性</h2><small>${disabled?'不适用':'单选'}</small></div>
-    <div class="grade-box">${slotControl('q2',rules.q2,labels.q2,disabled)}<p class="grade-hint">${disabled?skipped:esc(rules.q2.find(x=>x.id===labels.q2)?.hint || '根据整体对比度、干扰范围及神经能否可靠追踪，选择良、中或差。')}</p></div>
+    <div class="grade-box">${slotControl('q2',rules.q2,labels.q2,disabled)}<p class="grade-hint">${disabled?skipped:esc(rules.q2.find(x=>x.id===labels.q2)?.hint || '根据整体对比度、干扰范围及神经能否可靠追踪，选择相应档位。')}</p></div>
   </section>
   <section class="question q3-question ${disabled?'disabled':''}">
     <div class="question-title"><span class="q-number">Q3</span><h2>影响神经追踪的干扰因素</h2><small>${disabled?'不适用':'多选'}</small></div>
