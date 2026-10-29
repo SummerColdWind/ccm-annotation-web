@@ -342,8 +342,16 @@ progress::-moz-progress-bar { background:#638c57; }
 .q3-question.disabled .factor-card.has-options { background:#ece6d7; border-color:#cec3ac; }
 .q3-question.disabled .choice { opacity:1; background:#ece6d7; color:#7e7360; border-color:#cec3ac; }
 .q3-question.disabled .choice:before { background:#ddd7c9; border-color:#aaa18e; }
+.submit-bar { flex-wrap:wrap; }
+.submit-bar .save-feedback { flex:1 1 145px; }
+.task-actions { display:flex; align-items:center; gap:10px; margin-left:auto; }
+#previous-task { font-size:14px; min-height:41px; white-space:nowrap; }
+.empty-actions { display:flex; justify-content:center; gap:12px; }
 .skip-note { font-size:12px; color:#746248; margin:0 0 9px; }
 @media(max-width:580px) {
+  .submit-bar .save-feedback { flex-basis:100%; }
+  .task-actions { width:100%; justify-content:space-between; }
+  #previous-task { font-size:12px; min-height:38px; }
   .q1-question>.question-note,.skip-note { font-size:10px; }
   .q2-question .grade-box { grid-template-columns:1fr; gap:8px; }
   .q2-question .grade-hint { font-size:10px; }

@@ -88,7 +88,20 @@ def create_app(db_path=None, image_root=None, secure_cookie=None):
             raise HTTPException(404, "任务不存在或无权访问")
         return row
 
-    def task(row):
+    def adjacent_task_id(db, user_id, dataset_id, position=None, forward=False):
+        comparison, order = (">", "ASC") if forward else ("<", "DESC")
+        params = [user_id, dataset_id, MANUAL_VERSION]
+        boundary = ""
+        if position is not None:
+            boundary = f"AND a.position {comparison} ?"
+            params.append(position)
+        row = db.execute(f"""SELECT a.id FROM assignments a JOIN images i ON i.id=a.image_id
+            LEFT JOIN annotations n ON n.assignment_id=a.id
+            WHERE a.user_id=? AND i.dataset_id=? AND (n.assignment_id IS NULL OR n.manual_version=?)
+            {boundary} ORDER BY a.position {order},a.id {order} LIMIT 1""", params).fetchone()
+        return row["id"] if row else None
+
+    def task(db, row):
         if row["labels"] and row["annotation_version"] != MANUAL_VERSION:
             raise HTTPException(409, "旧版正式记录保留供导出，不能用新版规则编辑")
         draft = row["draft"] if row["draft_version"] == MANUAL_VERSION else None
@@ -96,6 +109,8 @@ def create_app(db_path=None, image_root=None, secure_cookie=None):
                 "width": row["width"], "height": row["height"], "revision": row["revision"], "submitted": bool(row["labels"]),
                 "manual_version": MANUAL_VERSION, "draft_reset": bool(row["draft"] and not draft),
                 "has_draft": bool(draft), "labels": json.loads(draft or row["labels"] or json.dumps(EMPTY)),
+                "previous_id": adjacent_task_id(db,row["user_id"],row["dataset_id"],row["position"]),
+                "next_id": adjacent_task_id(db,row["user_id"],row["dataset_id"],row["position"],forward=True),
                 "image_url": f"/api/tasks/{row['id']}/image"}
 
     @app.get("/api/health")
@@ -162,7 +177,7 @@ def create_app(db_path=None, image_root=None, secure_cookie=None):
             db.execute("BEGIN IMMEDIATE")
             ds = db.execute("SELECT * FROM datasets WHERE active=1").fetchone()
             if not ds:
-                return {"task": None, "reason": "管理员尚未启用图像集"}
+                return {"task": None, "previous_id": None, "reason": "管理员尚未启用图像集"}
             uid, did = current["id"], ds["id"]
             if ds["mode"] == "independent":
                 ids = [r[0] for r in db.execute("SELECT id FROM images WHERE dataset_id=? AND id NOT IN (SELECT image_id FROM assignments WHERE user_id=?)", (did,uid))]
@@ -175,12 +190,14 @@ def create_app(db_path=None, image_root=None, secure_cookie=None):
                 if candidate:
                     cursor = db.execute("INSERT INTO assignments(user_id,image_id,position) VALUES(?,?,?)", (uid,candidate[0],candidate[0]))
                     pending = (cursor.lastrowid,)
-            return {"task": task(assignment(db,pending[0],uid)) if pending else None, "reason": "当前图像集已无待标注图像"}
+            return {"task": task(db,assignment(db,pending[0],uid)) if pending else None,
+                    "previous_id": None if pending else adjacent_task_id(db,uid,did),
+                    "reason": "当前图像集已无待标注图像"}
 
     @app.get("/api/tasks/{task_id}")
     def get_task(task_id: int, current=Depends(user)):
         with connect(database) as db:
-            return task(assignment(db, task_id, current["id"]))
+            return task(db, assignment(db, task_id, current["id"]))
 
     @app.get("/api/tasks/{task_id}/image")
     def get_image(task_id: int, current=Depends(user)):

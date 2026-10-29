@@ -1,7 +1,7 @@
 'use strict';
 const $ = (selector) => document.querySelector(selector);
 const esc = (text) => String(text ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const state = {user:null, rules:null, task:null, labels:null, dirty:false, generation:0, timer:null, saving:Promise.resolve(), busy:false, imageReady:false, view:'work'};
+const state = {user:null, rules:null, task:null, labels:null, completedPreviousId:null, dirty:false, generation:0, timer:null, saving:Promise.resolve(), busy:false, imageReady:false, view:'work'};
 let scale=1, panX=0, panY=0, drag=null, toastTimer=null, passwordUser=null;
 
 function toast(message) { $('#toast').textContent=message; $('#toast').hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>$('#toast').hidden=true,4500); }
@@ -44,11 +44,11 @@ async function nextTask() {
   const data=await api('/api/tasks/next',{method:'POST'});
   await refreshProgress();
   $('#workspace').hidden=!data.task; $('#empty-work').hidden=!!data.task;
-  if(!data.task) { state.task=null; state.dirty=false; $('#empty-title').textContent=data.reason; return; }
+  if(!data.task) { state.task=null; state.labels=null; state.dirty=false; state.completedPreviousId=data.previous_id; $('#empty-title').textContent=data.reason; updateSubmit(); return; }
   loadTask(data.task);
 }
 function loadTask(task) {
-  clearTimeout(state.timer); state.task=task; state.labels=structuredClone(task.labels); state.dirty=false; state.generation=0; state.imageReady=false;
+  clearTimeout(state.timer); state.task=task; state.labels=structuredClone(task.labels); state.completedPreviousId=null; state.dirty=false; state.generation=0; state.imageReady=false;
   $('#workspace').hidden=false; $('#empty-work').hidden=true; $('#work-error').textContent='';
   $('#image-number').textContent=`NO. ${String(task.image_id).padStart(5,'0')}`;
   $('#dataset-name').textContent=task.dataset_name;
@@ -95,13 +95,37 @@ function renderQuestions() {
   </section>`;
 }
 function formProblem() {
+  if(!state.task) return '暂无待标注图像';
   return CCMForm.problem(state.labels) || (!state.imageReady?'等待原图加载成功':'');
 }
 function updateSubmit() {
   const problem=formProblem(); $('#submit').disabled=state.busy || !!problem;
+  $('#previous-task').disabled=state.busy || !state.task?.previous_id;
+  $('#previous-empty').hidden=!state.completedPreviousId;
+  $('#previous-empty').disabled=state.busy;
   $('#validation-hint').textContent=problem || (state.task?.submitted?'修改后将保留历史版本':CCMForm.applicable(state.labels)?'三步已完成，可以提交':'后续问题已跳过，可以提交');
-  $('#submit').innerHTML=state.busy?'正在保存…':state.task?.submitted?'保存修改并继续 <span>→</span>':'保存并下一张 <span>→</span>';
+  $('#submit').innerHTML=state.busy?'处理中…':'保存并下一张 <span>→</span>';
 }
+function setBusy(busy) {
+  state.busy=busy;
+  for(const selector of ['#questions','#navigation','#account']) $(selector).inert=busy;
+  $('#reload-tasks').disabled=busy;
+  updateSubmit();
+}
+async function previousTask() {
+  const previousId=state.task?.previous_id ?? state.completedPreviousId;
+  if(state.busy || !previousId) return;
+  setBusy(true);
+  try {
+    await flushDraft();
+    const task=await api(`/api/tasks/${previousId}`);
+    await refreshProgress();
+    loadTask(task); window.scrollTo({top:0});
+  } catch(error) { $('#work-error').textContent=error.message; toast(error.message); }
+  finally { setBusy(false); }
+}
+$('#previous-task').onclick=previousTask;
+$('#previous-empty').onclick=previousTask;
 function changed(focusSelector) {
   CCMForm.reconcile(state.labels);
   state.dirty=true; state.generation++; $('#save-status').textContent='草稿待保存…'; $('#work-error').textContent='';
@@ -164,16 +188,20 @@ $('#questions').addEventListener('keydown',event=>{
 });
 $('#submit').addEventListener('click',async()=>{
   if(state.busy || formProblem()) return;
-  state.busy=true; $('#questions').inert=true; $('#navigation').inert=true; $('#account').inert=true; updateSubmit();
+  setBusy(true);
   try {
     await flushDraft();
     const task=state.task;
     const result=await api(`/api/tasks/${task.id}/submit`,{method:'POST',body:JSON.stringify({labels:state.labels,revision:task.revision,manual_version:state.rules.version})});
     task.revision=result.revision; state.dirty=false; task.submitted=true;
     $('#save-status').textContent='✓ 正式标注已保存'; toast('标注已保存');
-    await nextTask();
+    if(task.next_id) {
+      const following=await api(`/api/tasks/${task.next_id}`);
+      await refreshProgress(); loadTask(following);
+    } else await nextTask();
+    window.scrollTo({top:0});
   } catch(error) { $('#work-error').textContent=error.message; }
-  finally { state.busy=false; $('#questions').inert=false; $('#navigation').inert=false; $('#account').inert=false; updateSubmit(); }
+  finally { setBusy(false); }
 });
 function applyTransform() {
   $('#specimen').style.transform=`translate(calc(-50% + ${panX}px),calc(-50% + ${panY}px)) scale(${scale})`;

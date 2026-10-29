@@ -118,6 +118,70 @@ def test_independent_random_queues_resume_and_complete(env):
     assert bob.get('/api/progress').json()['completed']==0
 
 
+def test_previous_navigation_preserves_order_drafts_and_audit(env):
+    activate(env)
+    client=env['clients']['alice']
+    first=next_task(client)
+    with connect(env['db']) as db:
+        ids=[r['id'] for r in db.execute('SELECT id FROM assignments WHERE user_id=2 ORDER BY position')]
+    assert first['previous_id'] is None and first['next_id']==ids[1]
+    assert submit(client,first).status_code==200
+    second=next_task(client)
+    assert second['previous_id']==first['id'] and second['next_id']==ids[2]
+    partial={'q1':{'a':None},'q2':'bc','q3':[],'q3_details':{}}
+    assert client.put(f"/api/tasks/{second['id']}/draft",json={
+        'labels':partial,'revision':second['revision'],'manual_version':MANUAL_VERSION}).status_code==200
+    previous=client.get(f"/api/tasks/{second['previous_id']}").json()
+    assert previous['submitted'] and previous['labels']==VALID
+    assert submit(client,previous,{**VALID,'q2':'ab'}).status_code==200
+    restored=client.get(f"/api/tasks/{previous['next_id']}").json()
+    assert restored['id']==second['id'] and restored['has_draft'] and restored['labels']==partial
+    assert client.get('/api/progress').json()['completed']==1
+    with connect(env['db']) as db:
+        assert db.execute('SELECT count(*) FROM annotation_audit WHERE assignment_id=?',(first['id'],)).fetchone()[0]==2
+    assert client.get(f'/api/tasks/{ids[-1]}').json()['next_id'] is None
+
+
+def test_navigation_is_scoped_to_user_dataset_and_editable_rules(env):
+    activate(env)
+    alice,bob=env['clients']['alice'],env['clients']['bob']
+    first=next_task(alice)
+    next_task(bob)
+    second=alice.get(f"/api/tasks/{first['next_id']}").json()
+    third=alice.get(f"/api/tasks/{second['next_id']}").json()
+    with connect(env['db']) as db:
+        db.execute('INSERT INTO annotations(assignment_id,labels,manual_version) VALUES(?,?,?)',
+                   (second['id'],json.dumps(VALID),'20261029-r3'))
+    assert alice.get(f"/api/tasks/{first['id']}").json()['next_id']==third['id']
+    assert alice.get(f"/api/tasks/{third['id']}").json()['previous_id']==first['id']
+    assert bob.get(f"/api/tasks/{first['id']}").status_code==404
+    other=env['root']/'other'; other.mkdir()
+    Image.new('L',(16,16),100).save(other/'one.png')
+    admin=env['clients']['admin']
+    did=admin.post('/api/admin/datasets',json={'name':'Other','path':'other','mode':'independent'}).json()['id']
+    assert admin.post(f'/api/admin/datasets/{did}/activate').status_code==200
+    only=next_task(alice)
+    assert only['previous_id'] is None and only['next_id'] is None
+    assert alice.get(f"/api/tasks/{third['id']}").json()['previous_id']==first['id']
+
+
+def test_completed_queue_can_return_to_last_editable_image(env):
+    client=env['clients']['alice']
+    assert client.post('/api/tasks/next').json()['previous_id'] is None
+    activate(env); next_task(client)
+    with connect(env['db']) as db:
+        ids=[r['id'] for r in db.execute('SELECT id FROM assignments WHERE user_id=2 ORDER BY position')]
+        db.executemany('INSERT INTO annotations(assignment_id,labels,manual_version) VALUES(?,?,?)',
+                       [(task_id,json.dumps(VALID),MANUAL_VERSION) for task_id in ids])
+    result=client.post('/api/tasks/next').json()
+    assert result['task'] is None and result['previous_id']==ids[-1]
+    last=client.get(f"/api/tasks/{result['previous_id']}").json()
+    assert last['submitted'] and last['previous_id']==ids[-2] and last['next_id'] is None
+    with connect(env['db']) as db:
+        db.execute('UPDATE annotations SET manual_version=?',('20261029-r3',))
+    assert client.post('/api/tasks/next').json()['previous_id'] is None
+
+
 def test_draft_restoration_revision_conflict_and_audit(env):
     did=activate(env)
     client=env["clients"]["alice"]
