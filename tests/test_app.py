@@ -6,12 +6,12 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from app.db import connect, password_hash
+from app.db import connect, initialize, password_hash
 from app.main import create_app
-from app.rules import normalize
+from app.rules import MANUAL_VERSION, normalize
 
 PASSWORD = "only-for-test-12345"
-VALID = {"q1": {"a": "k"}, "q2": "a", "q3": "a", "q4": ["n"]}
+VALID = {"q1": {"a": None}, "q2": "a", "q3": ["n"], "q3_details": {}}
 
 
 @pytest.fixture(scope="session")
@@ -58,19 +58,23 @@ def next_task(client):
 
 
 def submit(client, task, labels=VALID):
-    return client.post(f"/api/tasks/{task['id']}/submit",json={"labels":labels,"revision":task["revision"]})
+    return client.post(f"/api/tasks/{task['id']}/submit",json={"labels":labels,"revision":task["revision"],"manual_version":MANUAL_VERSION})
 
 
 @pytest.mark.parametrize("q1", [{"b":"i"},{"a":"k","c":"i"},{"d":"k"},{"a":"j","b":"j"}])
 def test_mixed_layer_rule(q1):
     result=normalize({**VALID,"q1":q1},True)
-    assert result["q2"] == result["q3"] == "n"
+    assert result["q2"] == "n" and result["q3"] is None and result["q3_details"] == {}
 
 
 @pytest.mark.parametrize("labels", [
-    {**VALID,"q1":{}}, {**VALID,"q1":{"a":None}}, {**VALID,"q1":{"a":"z"}},
-    {**VALID,"q2":"n"}, {**VALID,"q3":None}, {**VALID,"q4":[]},
-    {**VALID,"q4":["a","n"]}, {**VALID,"q4":["a","a"]}, {**VALID,"q4":["f"]},
+    {**VALID,"q1":{}}, {**VALID,"q1":{"a":None,"b":"i"}}, {**VALID,"q1":{"a":"z"}},
+    {**VALID,"q2":"n"}, {**VALID,"q2":"d"}, {**VALID,"q3":None}, {**VALID,"q3":[]},
+    {**VALID,"q3":["a","n"]}, {**VALID,"q3":["a","a"]}, {**VALID,"q3":["h"]},
+    {**VALID,"q3":["e"]}, {**VALID,"q3":["f"]},
+    {**VALID,"q3":["f"],"q3_details":{"f":["f1","f2"]}},
+    {**VALID,"q3_details":{"e":["e1"]}}, {**VALID,"q3_details":{"f":"f1"}},
+    {**VALID,"q4":["n"]},
 ])
 def test_invalid_final_labels(labels):
     with pytest.raises(ValueError):
@@ -78,14 +82,15 @@ def test_invalid_final_labels(labels):
 
 
 def test_incomplete_drafts_permitted():
-    assert normalize({"q1":{"a":None},"q2":None,"q3":None,"q4":[]})["q1"] == {"a":None}
+    assert normalize({"q1":{"a":None},"q2":None,"q3":[]})["q1"] == {"a":None}
+    assert normalize({**VALID,"q3":["e","f"]})["q3_details"] == {"e":[],"f":None}
 
 
 def test_auth_and_csrf(env):
     anonymous=TestClient(env["app"])
     assert anonymous.get("/api/history").status_code == 401
     assert anonymous.get("/api/admin/export?dataset_id=1").status_code == 401
-    assert anonymous.get("/api/manual").status_code == 401
+    assert anonymous.get("/api/manual").status_code == 404
     assert env["clients"]["alice"].get("/api/admin/overview").status_code == 403
     client=env["clients"]["alice"]
     assert client.post("/api/tasks/next",headers={"X-CSRF-Token":"bad"}).status_code == 403
@@ -117,8 +122,8 @@ def test_draft_restoration_revision_conflict_and_audit(env):
     did=activate(env)
     client=env["clients"]["alice"]
     task=next_task(client)
-    partial={"q1":{"a":None},"q4":[]}
-    result=client.put(f"/api/tasks/{task['id']}/draft",json={"labels":partial,"revision":0})
+    partial={"q1":{"a":None},"q3":[]}
+    result=client.put(f"/api/tasks/{task['id']}/draft",json={"labels":partial,"revision":0,"manual_version":MANUAL_VERSION})
     assert result.status_code==200
     restored=next_task(client)
     assert restored["has_draft"] and restored["labels"]["q1"]=={"a":None}
@@ -131,7 +136,8 @@ def test_draft_restoration_revision_conflict_and_audit(env):
         assert db.execute("SELECT count(*) FROM annotation_audit").fetchone()[0]==2
     export=env["clients"]["admin"].get(f"/api/admin/export?dataset_id={did}&format=jsonl")
     record=json.loads(export.text)
-    assert record["q2"]=="b" and record["q1_a"]=="k" and record["manual_version"]=="20261027"
+    assert record["q2"]=="b" and record["q1_a"]=="" and record["q1_layers"]=="a" and record["manual_version"]==MANUAL_VERSION
+    assert record["q3"]=="n" and "q4" not in record
     assert len(record["sha256"])==64
     assert len(client.get('/api/history').json())==1
 
@@ -145,7 +151,7 @@ def test_private_images_and_unchanged_pixels(env):
     assert client.get(task["image_url"]).content==path.read_bytes()
     assert env["clients"]["bob"].get(task["image_url"]).status_code==404
     assert env["clients"]["bob"].get(f"/api/tasks/{task['id']}").status_code==404
-    assert env["clients"]["bob"].post(f"/api/tasks/{task['id']}/submit",json={"labels":VALID,"revision":0}).status_code==404
+    assert env["clients"]["bob"].post(f"/api/tasks/{task['id']}/submit",json={"labels":VALID,"revision":0,"manual_version":MANUAL_VERSION}).status_code==404
     Image.new("L",(16,16),255).save(path)
     assert client.get(task["image_url"]).status_code==409
     assert submit(client,task).status_code==409
@@ -192,7 +198,7 @@ def test_server_forces_na_for_mixed_layers(env):
     client=env['clients']['alice'];task=next_task(client)
     result=submit(client,task,{**VALID,'q1':{'a':'k','b':'i'}})
     assert result.status_code==200
-    assert result.json()['labels']['q2']==result.json()['labels']['q3']=='n'
+    assert result.json()['labels']['q2']=='n' and result.json()['labels']['q3'] is None
 
 
 def test_shared_optional_api_mode(env):
@@ -233,11 +239,9 @@ def test_empty_dataset_and_security_headers(env):
     assert client.get('/api/me').headers['cache-control']=='no-store'
 
 
-def test_manual_examples_and_backup(env, tmp_path, monkeypatch):
+def test_backup(env, tmp_path, monkeypatch):
     from app import backup
     client=env['clients']['alice']
-    assert '20261027' in client.get('/api/manual').json()['text']
-    assert client.get('/manual/images/Q1/a/R0200.png').status_code==200
     activate(env)
     assert submit(client,next_task(client)).status_code==200
     destination=tmp_path/'snapshot.sqlite3'
@@ -249,3 +253,83 @@ def test_manual_examples_and_backup(env, tmp_path, monkeypatch):
         assert db.execute('SELECT count(*) FROM annotations').fetchone()[0]==1
     with pytest.raises(SystemExit):
         backup.main()
+
+
+@pytest.mark.parametrize('layer', ['a','b','c','d'])
+def test_single_layer_has_no_area(layer):
+    labels=normalize({**VALID,'q1':{layer:'k'}},True)
+    assert labels['q1']=={layer:None}
+    if layer!='a':
+        assert labels['q2']=='n' and labels['q3'] is None
+
+
+@pytest.mark.parametrize('grade', ['a','b','c'])
+def test_new_q2_three_grades(grade):
+    assert normalize({**VALID,'q2':grade},True)['q2']==grade
+
+
+@pytest.mark.parametrize('immune', ['f1','f2'])
+def test_overlap_multiple_and_immune_single(env, immune):
+    did=activate(env); client=env['clients']['alice']; task=next_task(client)
+    labels={**VALID,'q3':['e','f','g'],'q3_details':{'e':['e1','e2'],'f':immune}}
+    assert submit(client,task,labels).status_code==200
+    restored=client.get(f"/api/tasks/{task['id']}").json()['labels']
+    assert restored==labels
+    record=json.loads(env['clients']['admin'].get(f'/api/admin/export?dataset_id={did}&format=jsonl').text)
+    assert record['q3']=='e;f;g' and record['q3_overlap']=='e1;e2' and record['q3_immune']==immune
+    audit=json.loads(env['clients']['admin'].get(f'/api/admin/export?dataset_id={did}&format=audit').text)
+    assert audit['q3_overlap']=='e1;e2' and audit['manual_version']==MANUAL_VERSION
+
+
+def test_rules_and_removed_manual_routes(env):
+    client=env['clients']['alice']
+    rules=client.get('/api/rules').json()
+    assert rules['version']==MANUAL_VERSION and 'q4' not in rules
+    assert [o['name'] for o in rules['q2']]==['优','良','差']
+    assert [o['id'] for o in rules['q3']]==list('abcdefg')+['n']
+    assert client.get('/api/manual').status_code==404
+    assert client.get('/manual/images/Q1/a/R0200.png').status_code==404
+    page=client.get('/').text
+    assert 'manual-nav' not in page and 'manual-dialog' not in page
+    assert client.get('/api/health').json()['manual_version']==MANUAL_VERSION
+
+
+def test_old_drafts_are_not_reinterpreted_and_old_clients_cannot_write(env):
+    activate(env); client=env['clients']['alice']; task=next_task(client)
+    old={'q1':{'a':'k'},'q2':'c','q3':'b','q4':['n']}
+    with connect(env['db']) as db:
+        db.execute('UPDATE assignments SET draft=?,draft_version=NULL,revision=7 WHERE id=?',(json.dumps(old),task['id']))
+    current=next_task(client)
+    assert current['draft_reset'] and not current['has_draft'] and current['revision']==7
+    assert current['labels']=={'q1':{},'q2':None,'q3':[],'q3_details':{}}
+    for version in (None,'20261027'):
+        body={'labels':VALID,'revision':7,'manual_version':version}
+        assert client.put(f"/api/tasks/{task['id']}/draft",json=body).status_code==409
+        assert client.post(f"/api/tasks/{task['id']}/submit",json=body).status_code==409
+    assert submit(client,current).status_code==200
+
+
+def test_legacy_schema_adds_draft_version_without_losing_accounts(tmp_path, hashed):
+    from app.db import SCHEMA
+    path=tmp_path/'legacy.sqlite3'
+    with connect(path) as db:
+        db.executescript(SCHEMA.replace('draft_version TEXT, ',''))
+        db.execute("INSERT INTO users(username,display_name,password_hash,role) VALUES('kept','kept',?,'admin')",(hashed,))
+    initialize(path); initialize(path)
+    with connect(path) as db:
+        assert 'draft_version' in {r[1] for r in db.execute('PRAGMA table_info(assignments)')}
+        assert db.execute('SELECT username FROM users').fetchone()[0]=='kept'
+
+
+def test_legacy_formal_record_is_preserved_for_export(env):
+    did=activate(env); client=env['clients']['alice']; task=next_task(client)
+    old={'q1':{'a':'k'},'q2':'c','q3':'d','q4':['b']}
+    with connect(env['db']) as db:
+        db.execute('INSERT INTO annotations(assignment_id,labels,manual_version) VALUES(?,?,?)',(task['id'],json.dumps(old),'20261027'))
+    assert client.get(f"/api/tasks/{task['id']}").status_code==409
+    assert submit(client,task).status_code==409
+    assert submit(client,next_task(client)).status_code==200
+    records=[json.loads(line) for line in env['clients']['admin'].get(f'/api/admin/export?dataset_id={did}&format=jsonl').text.splitlines()]
+    legacy=next(r for r in records if r['manual_version']=='20261027')
+    assert legacy['q2']=='c' and legacy['q3']=='d' and legacy['q4']=='b'
+    assert env['clients']['admin'].get(f'/api/admin/export?dataset_id={did}').status_code==200

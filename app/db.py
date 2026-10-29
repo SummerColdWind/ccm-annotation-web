@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS images (
 );
 CREATE TABLE IF NOT EXISTS assignments (
  id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), image_id INTEGER NOT NULL REFERENCES images(id),
- position INTEGER NOT NULL, draft TEXT, revision INTEGER NOT NULL DEFAULT 0,
+ position INTEGER NOT NULL, draft TEXT, draft_version TEXT, revision INTEGER NOT NULL DEFAULT 0,
  UNIQUE(user_id,image_id)
 );
 CREATE INDEX IF NOT EXISTS assignments_user ON assignments(user_id,position);
@@ -62,6 +62,8 @@ def initialize(path):
     with connect(path) as db:
         db.execute("PRAGMA journal_mode=WAL")
         db.executescript(SCHEMA)
+        if "draft_version" not in {row[1] for row in db.execute("PRAGMA table_info(assignments)")}:
+            db.execute("ALTER TABLE assignments ADD COLUMN draft_version TEXT")
 
 
 def password_hash(password):

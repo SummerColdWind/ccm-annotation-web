@@ -11,7 +11,7 @@ args = parser.parse_args()
 source_name = "NotoSansSC.ttf" if args.family == "sans" else "NotoSerifSC.ttf"
 source = ROOT / "output/font-source" / source_name
 characters = set(chr(n) for n in range(32, 127))
-for folder in ("app", "static", "reference"):
+for folder in ("app", "static"):
     for path in (ROOT / folder).rglob("*"):
         if path.is_file() and path.suffix in {".py", ".js", ".html", ".md"}:
             characters.update(path.read_text(encoding="utf-8"))

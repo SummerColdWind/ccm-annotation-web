@@ -15,11 +15,11 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image, UnidentifiedImageError
 
 from .db import connect, default_db, initialize, password_hash, verify_password
-from .rules import AREAS, LAYERS, MANUAL_VERSION, Q2, Q3, Q4, normalize
+from .rules import AREAS, LAYERS, MANUAL_VERSION, Q2, Q3, normalize
 
 BASE = Path(__file__).resolve().parents[1]
 EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
-EMPTY = {"q1": {}, "q2": None, "q3": None, "q4": []}
+EMPTY = {"q1": {}, "q2": None, "q3": [], "q3_details": {}}
 
 
 def create_app(db_path=None, image_root=None, secure_cookie=None):
@@ -52,7 +52,7 @@ def create_app(db_path=None, image_root=None, secure_cookie=None):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "same-origin"
         response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
-        if request.url.path.startswith(("/api", "/manual")):
+        if request.url.path.startswith("/api") or request.url.path == "/":
             response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -82,16 +82,20 @@ def create_app(db_path=None, image_root=None, secure_cookie=None):
 
     def assignment(db, assignment_id, user_id):
         row = db.execute("""SELECT a.*,i.dataset_id,i.width,i.height,i.relpath,i.sha256,d.root,d.name,
-            n.labels,n.updated_at FROM assignments a JOIN images i ON a.image_id=i.id JOIN datasets d ON d.id=i.dataset_id
+            n.labels,n.updated_at,n.manual_version AS annotation_version FROM assignments a JOIN images i ON a.image_id=i.id JOIN datasets d ON d.id=i.dataset_id
             LEFT JOIN annotations n ON n.assignment_id=a.id WHERE a.id=? AND a.user_id=?""", (assignment_id,user_id)).fetchone()
         if not row:
             raise HTTPException(404, "任务不存在或无权访问")
         return row
 
     def task(row):
+        if row["labels"] and row["annotation_version"] != MANUAL_VERSION:
+            raise HTTPException(409, "旧版正式记录保留供导出，不能用新版规则编辑")
+        draft = row["draft"] if row["draft_version"] == MANUAL_VERSION else None
         return {"id": row["id"], "image_id": row["image_id"], "dataset_id": row["dataset_id"], "dataset_name": row["name"],
                 "width": row["width"], "height": row["height"], "revision": row["revision"], "submitted": bool(row["labels"]),
-                "has_draft": bool(row["draft"]), "labels": json.loads(row["draft"] or row["labels"] or json.dumps(EMPTY)),
+                "manual_version": MANUAL_VERSION, "draft_reset": bool(row["draft"] and not draft),
+                "has_draft": bool(draft), "labels": json.loads(draft or row["labels"] or json.dumps(EMPTY)),
                 "image_url": f"/api/tasks/{row['id']}/image"}
 
     @app.get("/api/health")
@@ -140,7 +144,7 @@ def create_app(db_path=None, image_root=None, secure_cookie=None):
 
     @app.get("/api/rules")
     def rules(current=Depends(user)):
-        return {"version": MANUAL_VERSION, "layers": LAYERS, "areas": AREAS, "q2": Q2, "q3": Q3, "q4": Q4}
+        return {"version": MANUAL_VERSION, "layers": LAYERS, "areas": AREAS, "q2": Q2, "q3": Q3}
 
     @app.get("/api/progress")
     def progress(current=Depends(user)):
@@ -191,6 +195,8 @@ def create_app(db_path=None, image_root=None, secure_cookie=None):
         return Response(buffer.getvalue(), media_type="image/png")
 
     def save(task_id, body, current, final):
+        if body.get("manual_version") != MANUAL_VERSION:
+            raise HTTPException(409, "标注规则已更新，请刷新页面后重新填写")
         try:
             labels = normalize(body.get("labels"), final)
         except (ValueError, TypeError) as error:
@@ -198,12 +204,14 @@ def create_app(db_path=None, image_root=None, secure_cookie=None):
         with connect(database) as db:
             db.execute("BEGIN IMMEDIATE")
             row = assignment(db,task_id,current["id"])
+            if row["labels"] and row["annotation_version"] != MANUAL_VERSION:
+                raise HTTPException(409, "旧版正式记录保留供导出，不能用新版规则编辑")
             if body.get("revision") != row["revision"]:
                 raise HTTPException(409, "此图像已在其他页面修改，请刷新后重试")
             image_path(row, True)
             data = json.dumps(labels, ensure_ascii=False)
             revision = row["revision"] + 1
-            db.execute("UPDATE assignments SET draft=?,revision=? WHERE id=?", (None if final else data,revision,task_id))
+            db.execute("UPDATE assignments SET draft=?,draft_version=?,revision=? WHERE id=?", (None if final else data,None if final else MANUAL_VERSION,revision,task_id))
             if final:
                 db.execute("INSERT INTO annotations(assignment_id,labels,manual_version) VALUES(?,?,?) ON CONFLICT(assignment_id) DO UPDATE SET labels=excluded.labels,manual_version=excluded.manual_version,updated_at=CURRENT_TIMESTAMP", (task_id,data,MANUAL_VERSION))
                 db.execute("INSERT INTO annotation_audit(assignment_id,labels,manual_version,revision) VALUES(?,?,?,?)", (task_id,data,MANUAL_VERSION,revision))
@@ -330,12 +338,20 @@ def create_app(db_path=None, image_root=None, secure_cookie=None):
         for row in rows:
             record = dict(row)
             labels = json.loads(record.pop("labels"))
-            record.update({f"q1_{k}": labels["q1"].get(k, "") for k in "abcd"})
-            record.update(q2=labels["q2"],q3=labels["q3"],q4=";".join(labels["q4"]))
+            record["q1_layers"] = ";".join(sorted(labels["q1"]))
+            record.update({f"q1_{k}": labels["q1"].get(k) or "" for k in "abcd"})
+            record["q2"] = labels["q2"]
+            record["q3"] = ";".join(labels["q3"]) if isinstance(labels["q3"], list) else labels["q3"] or ""
+            if record["manual_version"] == MANUAL_VERSION:
+                record["q3_overlap"] = ";".join(labels["q3_details"].get("e", []))
+                record["q3_immune"] = labels["q3_details"].get("f") or ""
+            else:
+                # Keep legacy exports without reinterpreting their different Q2/Q3 codes.
+                record["q4"] = ";".join(labels.get("q4", []))
             data.append(record)
         if format == "csv":
             stream = io.StringIO(newline="")
-            fields = list(data[0]) if data else ["dataset","username","display_name","image_id","relpath","sha256","presentation_order","manual_version","submitted_at","updated_at","q1_a","q1_b","q1_c","q1_d","q2","q3","q4"]
+            fields = list(dict.fromkeys(k for record in data for k in record)) if data else ["dataset","username","display_name","image_id","relpath","sha256","presentation_order","manual_version","submitted_at","updated_at","q1_layers","q1_a","q1_b","q1_c","q1_d","q2","q3","q3_overlap","q3_immune"]
             writer = csv.DictWriter(stream, fieldnames=fields)
             writer.writeheader()
             # Spreadsheet formula injection protection for user-controlled text.
@@ -346,19 +362,6 @@ def create_app(db_path=None, image_root=None, secure_cookie=None):
             content = "".join(json.dumps(r,ensure_ascii=False)+"\n" for r in data)
         suffix = "csv" if format == "csv" else "jsonl"
         return Response(content, media_type="text/csv" if format == "csv" else "application/x-ndjson", headers={"Content-Disposition": f'attachment; filename="ccm-{dataset_id}-{format}.{suffix}"'})
-
-    @app.get("/api/manual")
-    def manual(current=Depends(user)):
-        manual_file = BASE / "reference" / "manual.md"
-        return {"text": manual_file.read_text(encoding="utf-8")}
-
-    @app.get("/manual/images/{path:path}")
-    def example(path: str, current=Depends(user)):
-        root = (BASE / "reference" / "ref-images-20261027").resolve()
-        file = (root / path).resolve()
-        if not file.is_relative_to(root) or not file.is_file() or file.suffix.lower() not in EXTENSIONS:
-            raise HTTPException(404)
-        return FileResponse(file)
 
     app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 

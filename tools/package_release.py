@@ -3,7 +3,7 @@ from pathlib import Path
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-DIRECTORIES = ("app", "static", "reference", "design", "tests", "deploy", ".github", "tools")
+DIRECTORIES = ("app", "static", "design", "tests", "deploy", ".github", "tools")
 FILES = (".gitignore", ".dockerignore", ".env.example", "Dockerfile", "compose.yaml", "requirements.txt", "requirements-dev.txt", "README.md")
 
 

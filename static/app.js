@@ -58,7 +58,7 @@ function loadTask(task) {
     $('#progress-caption').textContent='正在回看 · 保存后返回当前图像集';
   }
   $('#image-dimensions').textContent=`${task.width} × ${task.height} px · 原始图像`;
-  $('#save-status').textContent=task.has_draft?'已恢复草稿':task.submitted?'正在修改已提交记录':'等待标注';
+  $('#save-status').textContent=task.draft_reset?'规则已更新，请重新填写':task.has_draft?'已恢复草稿':task.submitted?'正在修改已提交记录':'等待标注';
   $('#image-loading').hidden=false; $('#image-loading').textContent='正在载入原图…';
   $('#specimen').style.visibility='hidden'; panX=panY=0;
   $('#specimen').src=task.image_url+`?revision=${task.revision}`;
@@ -66,36 +66,45 @@ function loadTask(task) {
 }
 function slotControl(key, options, value, disabled=false, area=null) {
   const index=options.findIndex(x=>x.id===value);
-  const title=area?`${state.rules.layers.find(l=>l.id===area).name}面积`:key==='q2'?'Q2 SBNP 整体可判读性':'Q3 与 SBNP 的视觉混淆';
+  const title=area?`${state.rules.layers.find(l=>l.id===area).name}面积`:'Q2 SBNP 整体可判读性';
   return `<div class="slot-control ${disabled?'disabled':''} ${index<0?'unset':''}" style="--slots:${options.length}"><div class="slot-track"><input type="range" min="0" max="${options.length-1}" step="1" value="${Math.max(0,index)}" data-key="${key}" ${area?`data-area="${area}"`:''} aria-label="${esc(title)}" aria-valuetext="${index<0?'待选择':esc(options[index].name)}" ${disabled?'disabled':''}><div class="slot-dots" aria-hidden="true">${options.map((_,i)=>`<i style="--stop:${i}" class="${i===index?'chosen':''}"></i>`).join('')}</div></div><div class="slot-labels">${options.map(o=>`<button type="button" data-slot="${o.id}" data-key="${key}" ${area?`data-area="${area}"`:''} class="${value===o.id?'selected':''}" ${disabled?'disabled':''} aria-label="${esc(title+'：'+o.name+(o.detail?' '+o.detail:''))}" aria-pressed="${value===o.id}"><strong>${esc(o.name)}</strong>${o.detail?`<small>${esc(o.detail)}</small>`:''}</button>`).join('')}</div></div>`;
 }
 function renderQuestions() {
-  const labels=state.labels, rules=state.rules, keys=Object.keys(labels.q1), applicable=keys.length===1 && keys[0]==='a';
-  const disabled=!applicable;
-  const grades=(key,title)=>`<section class="question grade-question ${disabled?'disabled':''}"><div class="question-title"><span class="q-number">${key.toUpperCase()}</span><h2>${title}</h2></div><p class="question-note">${key==='q2'?'可见神经能否可靠识别和追踪':'仅评价与神经追踪相关的混淆'}</p><div class="grade-box">${slotControl(key,rules[key],labels[key],disabled)}<p class="grade-hint">${disabled?(keys.length?'不适用 · Q1 包含非 SBNP 层面或区域':'先完成 Q1，再进行分级'):esc(rules[key].find(x=>x.id===labels[key])?.hint || '请选择一档，不预设分级。')}</p></div></section>`;
-  $('#questions').innerHTML=`<section class="question q1-question"><div class="question-title"><span class="q-number">Q1</span><h2>图像中可辨认出哪些层面或区域？</h2><small>多选 + 面积</small></div><p class="question-note">选择所有可辨认的层面，并分别记录其在整幅图像中的面积。</p><div class="layer-list">${rules.layers.map(layer=>{const selected=layer.id in labels.q1;return `<div class="layer-row ${selected?'selected':''}"><button type="button" class="choice ${selected?'selected':''}" data-layer="${layer.id}" aria-pressed="${selected}" title="${esc(layer.hint)}">${esc(layer.name)}</button>${slotControl('q1',rules.areas,labels.q1[layer.id],!selected,layer.id)}</div>`;}).join('')}</div></section><div class="grade-pair">${grades('q2','SBNP 整体可判读性')}${grades('q3','与 SBNP 的视觉混淆')}</div><section class="question q4-question"><div class="question-title"><span class="q-number">Q4</span><h2>采集相关退化或伪影</h2><small>多选</small></div><p class="question-note">未见明显退化或伪影时，选择“不适用”。</p><div class="q4-grid">${rules.q4.map(o=>`<button type="button" class="choice ${labels.q4.includes(o.id)?'selected':''}" data-artifact="${o.id}" aria-pressed="${labels.q4.includes(o.id)}" title="${esc(o.hint)}">${esc(o.name)}</button>`).join('')}</div></section>`;
+  const labels=state.labels, rules=state.rules, keys=Object.keys(labels.q1), applicable=CCMForm.applicable(labels);
+  const disabled=!applicable, interference=labels.q3 || [];
+  const skipped=keys.length?'已跳过 · Q1 包含非 SBNP 层面或区域':'先完成 Q1';
+  const details=(option)=>{
+    if(!option.options || !interference.includes(option.id) || disabled) return '';
+    return `<div class="factor-details" role="group" aria-label="${esc(option.name)}细分">${option.options.map(sub=>{
+      const selected=option.multiple?(labels.q3_details.e || []).includes(sub.id):labels.q3_details.f===sub.id;
+      return `<button type="button" class="choice detail-choice ${selected?'selected':''}" data-detail="${sub.id}" data-group="${option.id}" aria-pressed="${selected}">${esc(sub.name)}${sub.detail?` <span>${esc(sub.detail)}</span>`:''}</button>`;
+    }).join('')}</div>`;
+  };
+  $('#questions').innerHTML=`<section class="question q1-question">
+    <div class="question-title"><span class="q-number">Q1</span><h2>图像中存在哪些层面或区域？</h2><small>多选</small></div>
+    <p class="question-note">与 SBNP 重叠的区域只计入 SBNP；选择多个层面时填写面积。</p>
+    <div class="layer-list">${rules.layers.map(layer=>{const selected=layer.id in labels.q1;return `<div class="layer-row ${selected?'selected':''}"><button type="button" class="choice ${selected?'selected':''}" data-layer="${layer.id}" aria-pressed="${selected}" title="${esc(layer.hint)}">${esc(layer.name)}</button>${slotControl('q1',rules.areas,labels.q1[layer.id],!selected || keys.length<2,layer.id)}</div>`;}).join('')}</div>
+  </section>
+  <section class="question grade-question q2-question ${disabled?'disabled':''}">
+    <div class="question-title"><span class="q-number">Q2</span><h2>SBNP 整体可判读性</h2><small>${disabled?'不适用':'单选'}</small></div>
+    <div class="grade-box">${slotControl('q2',rules.q2,labels.q2,disabled)}<p class="grade-hint">${disabled?skipped:esc(rules.q2.find(x=>x.id===labels.q2)?.hint || '先判断整体对比度与明显干扰，再判断神经主干能否可靠追踪。')}</p></div>
+  </section>
+  <section class="question q3-question ${disabled?'disabled':''}">
+    <div class="question-title"><span class="q-number">Q3</span><h2>影响神经追踪的干扰因素</h2><small>${disabled?'不适用':'多选'}</small></div>
+    ${disabled?`<p class="skip-note">${skipped}</p>`:''}
+    <div class="q3-grid">${rules.q3.map(o=>`<div class="factor-card ${interference.includes(o.id)?'selected':''}"><button type="button" class="choice ${interference.includes(o.id)?'selected':''}" data-interference="${o.id}" aria-pressed="${interference.includes(o.id)}" title="${esc(o.hint)}" ${disabled?'disabled':''}>${esc(o.name)}</button>${details(o)}</div>`).join('')}</div>
+  </section>`;
 }
 function formProblem() {
-  if(!state.labels) return '等待图像';
-  const labels=state.labels, keys=Object.keys(labels.q1);
-  if(!keys.length) return 'Q1 · 请至少选择一个层面';
-  if(Object.values(labels.q1).some(v=>!v)) return 'Q1 · 请为所选层面指定面积';
-  if(keys.length===1 && keys[0]==='a') {
-    if(!labels.q2 || labels.q2==='n') return 'Q2 · 请选择可判读性分级';
-    if(!labels.q3 || labels.q3==='n') return 'Q3 · 请选择视觉混淆分级';
-  }
-  if(!labels.q4.length) return 'Q4 · 请选择伪影或“不适用”';
-  if(!state.imageReady) return '等待原图加载成功';
-  return '';
+  return CCMForm.problem(state.labels) || (!state.imageReady?'等待原图加载成功':'');
 }
 function updateSubmit() {
   const problem=formProblem(); $('#submit').disabled=state.busy || !!problem;
-  $('#validation-hint').textContent=problem || (state.task?.submitted?'修改后将保留历史版本':'四步已完成，可以提交');
+  $('#validation-hint').textContent=problem || (state.task?.submitted?'修改后将保留历史版本':CCMForm.applicable(state.labels)?'三步已完成，可以提交':'后续问题已跳过，可以提交');
   $('#submit').innerHTML=state.busy?'正在保存…':state.task?.submitted?'保存修改并继续 <span>→</span>':'保存并下一张 <span>→</span>';
 }
 function changed(focusSelector) {
-  const keys=Object.keys(state.labels.q1), applicable=keys.length===1 && keys[0]==='a';
-  for(const key of ['q2','q3']) { if(!applicable) state.labels[key]=keys.length?'n':null; else if(state.labels[key]==='n') state.labels[key]=null; }
+  CCMForm.reconcile(state.labels);
   state.dirty=true; state.generation++; $('#save-status').textContent='草稿待保存…'; $('#work-error').textContent='';
   renderQuestions(); updateSubmit();
   if(focusSelector) $(focusSelector)?.focus({preventScroll:true});
@@ -108,7 +117,7 @@ function flushDraft() {
     if(!state.dirty || !state.task) return;
     const task=state.task, generation=state.generation, labels=structuredClone(state.labels);
     $('#save-status').textContent='正在保存草稿…';
-    const result=await api(`/api/tasks/${task.id}/draft`,{method:'PUT',body:JSON.stringify({labels,revision:task.revision})});
+    const result=await api(`/api/tasks/${task.id}/draft`,{method:'PUT',body:JSON.stringify({labels,revision:task.revision,manual_version:state.rules.version})});
     task.revision=result.revision;
     if(state.task===task && state.generation===generation) { state.dirty=false; $('#save-status').textContent='✓ 草稿已保存'; }
   });
@@ -123,16 +132,20 @@ $('#questions').addEventListener('click',event=>{
   const button=event.target.closest('button'); if(!button || button.disabled) return;
   if(button.dataset.layer) {
     const key=button.dataset.layer;
-    if(key in state.labels.q1) delete state.labels.q1[key]; else state.labels.q1[key]=null;
+    CCMForm.toggleLayer(state.labels,key);
     changed(`[data-layer="${key}"]`);
   } else if(button.dataset.slot) {
     const {key,slot,area}=button.dataset;
     if(area) state.labels.q1[area]=slot; else state.labels[key]=slot;
     changed(`[data-key="${key}"][data-slot="${slot}"]${area?`[data-area="${area}"]`:''}`);
-  } else if(button.dataset.artifact) {
-    const value=button.dataset.artifact, selected=state.labels.q4.includes(value);
-    state.labels.q4=selected?state.labels.q4.filter(x=>x!==value):value==='n'?['n']:[...state.labels.q4.filter(x=>x!=='n'),value];
-    changed(`[data-artifact="${value}"]`);
+  } else if(button.dataset.interference) {
+    const value=button.dataset.interference;
+    CCMForm.toggleInterference(state.labels,value);
+    changed(`[data-interference="${value}"]`);
+  } else if(button.dataset.detail) {
+    const {group,detail}=button.dataset;
+    CCMForm.toggleDetail(state.labels,group,detail);
+    changed(`[data-detail="${detail}"]`);
   }
 });
 $('#questions').addEventListener('change',event=>{
@@ -152,7 +165,7 @@ $('#submit').addEventListener('click',async()=>{
   try {
     await flushDraft();
     const task=state.task;
-    const result=await api(`/api/tasks/${task.id}/submit`,{method:'POST',body:JSON.stringify({labels:state.labels,revision:task.revision})});
+    const result=await api(`/api/tasks/${task.id}/submit`,{method:'POST',body:JSON.stringify({labels:state.labels,revision:task.revision,manual_version:state.rules.version})});
     task.revision=result.revision; state.dirty=false; task.submitted=true;
     $('#save-status').textContent='✓ 正式标注已保存'; toast('标注已保存');
     await nextTask();
@@ -231,19 +244,4 @@ $('#password-form').addEventListener('submit',async event=>{
   event.preventDefault();const form=event.currentTarget,button=form.querySelector('button[type="submit"]') || form.querySelector('.primary');button.disabled=true;
   try{await api(`/api/admin/users/${passwordUser}`,{method:'PATCH',body:JSON.stringify(Object.fromEntries(new FormData(form)))});$('#password-dialog').close();form.reset();toast('密码已重置。');}catch(error){$('#password-error').textContent=error.message;}finally{button.disabled=false;}
 });
-$('#manual-nav').onclick=async()=>{
-  try {
-    if(!$('#manual-content').childElementCount){
-      const data=await api('/api/manual');
-      $('#manual-content').innerHTML=data.text.split(/\r?\n/).filter(Boolean).map(line=>{
-        const heading=/^(#{1,3}) (.*)$/.exec(line);if(heading)return `<h${heading[1].length}>${esc(heading[2])}</h${heading[1].length}>`;
-        const image=/^!\[([^\]]*)\]\(ref-images-20261027\/([\w/.-]+)\)$/.exec(line);
-        if(image)return `<img loading="lazy" src="/manual/images/${image[2].split('/').map(encodeURIComponent).join('/')}" alt="${esc(image[1])}">`;
-        return `<p>${esc(line).replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>')}</p>`;
-      }).join('');
-    }
-    $('#manual-dialog').showModal();
-  }catch(error){toast(error.message);}
-};
-$('#close-manual').onclick=()=>$('#manual-dialog').close();
 boot().catch(error=>{showLogin();if(!error.message.includes('登录已过期'))$('#login-error').textContent=error.message;});

@@ -5,7 +5,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && groupadd -g 10001 ccm && useradd -u 10001 -g ccm -m ccm && mkdir /data /images && chown ccm:ccm /data
 COPY --chown=ccm:ccm app ./app
 COPY --chown=ccm:ccm static ./static
-COPY --chown=ccm:ccm reference ./reference
 USER ccm
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4)"
