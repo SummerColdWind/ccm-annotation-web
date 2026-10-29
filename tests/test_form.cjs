@@ -31,6 +31,20 @@ test('immune count is mandatory and mutually exclusive',()=>{
     assert.equal(labels.q3_details.f,value); assert.equal(form.problem(labels),'');
   }
 });
+test('inline details select their factor directly and clear none',()=>{
+  const labels=pure();
+  form.toggleDetail(labels,'e','e1'); form.toggleDetail(labels,'e','e2');
+  assert.deepEqual(labels.q3,['e']); assert.deepEqual(labels.q3_details.e,['e1','e2']);
+  form.toggleDetail(labels,'f','f2');
+  assert.deepEqual(labels.q3,['e','f']); assert.equal(labels.q3_details.f,'f2');
+  form.toggleInterference(labels,'f'); assert.equal(labels.q3_details.f,undefined);
+  form.toggleInterference(labels,'n');
+  form.toggleDetail(labels,'f','f3');
+  assert.deepEqual(labels.q3,['f']); assert.deepEqual(labels.q3_details,{f:'f3'});
+  form.toggleLayer(labels,'b');
+  form.toggleDetail(labels,'e','e1'); form.toggleDetail(labels,'f','f1');
+  assert.equal(labels.q3,null); assert.deepEqual(labels.q3_details,{});
+});
 test('none clears all interference details; mixed layers clear all later answers',()=>{
   const labels=pure(); form.toggleInterference(labels,'e'); form.toggleDetail(labels,'e','e1');
   form.toggleInterference(labels,'f'); form.toggleDetail(labels,'f','f1');

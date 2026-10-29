@@ -64,21 +64,23 @@ function loadTask(task) {
   $('#specimen').src=task.image_url+`?revision=${task.revision}`;
   renderQuestions(); updateSubmit();
 }
-function slotControl(key, options, value, disabled=false, area=null) {
+function slotControl(key, options, value, disabled=false, area=null, group=null) {
   const index=options.findIndex(x=>x.id===value);
-  const title=area?`${state.rules.layers.find(l=>l.id===area).name}面积`:'Q2 SBNP 可追踪性';
-  return `<div class="slot-control ${disabled?'disabled':''} ${index<0?'unset':''}" style="--slots:${options.length}"><div class="slot-track"><input type="range" min="0" max="${options.length-1}" step="1" value="${Math.max(0,index)}" data-key="${key}" ${area?`data-area="${area}"`:''} aria-label="${esc(title)}" aria-valuetext="${index<0?'待选择':esc(options[index].name)}" ${disabled?'disabled':''}><div class="slot-dots" aria-hidden="true">${options.map((_,i)=>`<i style="--stop:${i}" class="${i===index?'chosen':''}"></i>`).join('')}</div></div><div class="slot-labels">${options.map(o=>`<button type="button" data-slot="${o.id}" data-key="${key}" ${area?`data-area="${area}"`:''} class="${value===o.id?'selected':''}" ${disabled?'disabled':''} aria-label="${esc(title+'：'+o.name+(o.detail?' '+o.detail:''))}" aria-pressed="${value===o.id}"><strong>${esc(o.name)}</strong>${o.detail?`<small>${esc(o.detail)}</small>`:''}</button>`).join('')}</div></div>`;
+  const title=area?`${state.rules.layers.find(l=>l.id===area).name}面积`:group?`Q3 ${state.rules.q3.find(o=>o.id===group).name}数量`:'Q2 SBNP 可追踪性';
+  const scope=area?`data-area="${area}"`:group?`data-group="${group}"`:'';
+  return `<div class="slot-control ${disabled?'disabled':''} ${index<0?'unset':''}" style="--slots:${options.length}"><div class="slot-track"><input type="range" min="0" max="${options.length-1}" step="1" value="${Math.max(0,index)}" data-key="${key}" ${scope} aria-label="${esc(title)}" aria-valuetext="${index<0?'待选择':esc(options[index].name+(options[index].detail?' '+options[index].detail:''))}" ${disabled?'disabled':''}><div class="slot-dots" aria-hidden="true">${options.map((_,i)=>`<i style="--stop:${i}" class="${i===index?'chosen':''}"></i>`).join('')}</div></div><div class="slot-labels">${options.map(o=>`<button type="button" data-slot="${o.id}" data-key="${key}" ${scope} class="${value===o.id?'selected':''}" ${disabled?'disabled':''} aria-label="${esc(title+'：'+o.name+(o.detail?' '+o.detail:''))}" aria-pressed="${value===o.id}"><strong>${esc(o.name)}</strong>${o.detail?`<small>${esc(o.detail)}</small>`:''}</button>`).join('')}</div></div>`;
 }
 function renderQuestions() {
   const labels=state.labels, rules=state.rules, keys=Object.keys(labels.q1), applicable=CCMForm.applicable(labels);
   const disabled=!applicable, interference=labels.q3 || [];
   const skipped=keys.length?'已跳过 · Q1 包含非 SBNP 层面或区域':'先完成 Q1';
   const details=(option)=>{
-    if(!option.options || !interference.includes(option.id) || disabled) return '';
-    return `<div class="factor-details" data-detail-group="${option.id}" role="group" aria-label="${esc(option.name)}细分">${option.options.map(sub=>{
-      const selected=option.multiple?(labels.q3_details.e || []).includes(sub.id):labels.q3_details.f===sub.id;
-      return `<button type="button" class="choice detail-choice ${selected?'selected':''}" data-detail="${sub.id}" data-group="${option.id}" aria-pressed="${selected}">${esc(sub.name)}${sub.detail?` <span>${esc(sub.detail)}</span>`:''}</button>`;
-    }).join('')}</div>`;
+    if(!option.options) return '';
+    const controls=option.multiple?option.options.map(sub=>{
+      const selected=(labels.q3_details[option.id] || []).includes(sub.id);
+      return `<button type="button" class="choice detail-choice ${selected?'selected':''}" data-detail="${sub.id}" data-group="${option.id}" aria-pressed="${selected}" ${disabled?'disabled':''}>${esc(sub.name)}</button>`;
+    }).join(''):slotControl('q3',option.options,labels.q3_details[option.id],disabled,null,option.id);
+    return `<div class="factor-controls" role="group" aria-label="${esc(option.name)}细分">${controls}</div>`;
   };
   $('#questions').innerHTML=`<section class="question q1-question">
     <div class="question-title"><span class="q-number">Q1</span><h2>图像中存在哪些层面或区域？</h2><small>多选</small></div>
@@ -92,7 +94,7 @@ function renderQuestions() {
   <section class="question q3-question ${disabled?'disabled':''}">
     <div class="question-title"><span class="q-number">Q3</span><h2>影响神经追踪的干扰因素</h2><small>${disabled?'不适用':'多选'}</small></div>
     ${disabled?`<p class="skip-note">${skipped}</p>`:''}
-    <div class="q3-grid">${rules.q3.map(o=>`<div class="factor-card ${interference.includes(o.id)?'selected':''}"><button type="button" class="choice ${interference.includes(o.id)?'selected':''}" data-interference="${o.id}" aria-pressed="${interference.includes(o.id)}" title="${esc(o.hint)}" ${disabled?'disabled':''}>${esc(o.name)}</button>${details(o)}</div>`).join('')}</div>
+    <div class="q3-grid">${rules.q3.map(o=>`<div class="factor-card ${o.options?'has-options':''} ${interference.includes(o.id)?'selected':''}"><button type="button" class="choice ${interference.includes(o.id)?'selected':''}" data-interference="${o.id}" aria-pressed="${interference.includes(o.id)}" title="${esc(o.hint)}" ${disabled?'disabled':''}>${esc(o.name)}</button>${details(o)}</div>`).join('')}</div>
   </section>`;
 }
 function formProblem() {
@@ -135,9 +137,10 @@ $('#questions').addEventListener('click',event=>{
     CCMForm.toggleLayer(state.labels,key);
     changed(`[data-layer="${key}"]`);
   } else if(button.dataset.slot) {
-    const {key,slot,area}=button.dataset;
-    if(area) state.labels.q1[area]=slot; else state.labels[key]=slot;
-    changed(`[data-key="${key}"][data-slot="${slot}"]${area?`[data-area="${area}"]`:''}`);
+    const {key,slot,area,group}=button.dataset;
+    if(group) CCMForm.toggleDetail(state.labels,group,slot);
+    else if(area) state.labels.q1[area]=slot; else state.labels[key]=slot;
+    changed(`[data-key="${key}"][data-slot="${slot}"]${area?`[data-area="${area}"]`:group?`[data-group="${group}"]`:''}`);
   } else if(button.dataset.interference) {
     const value=button.dataset.interference;
     CCMForm.toggleInterference(state.labels,value);
@@ -150,10 +153,13 @@ $('#questions').addEventListener('click',event=>{
 });
 $('#questions').addEventListener('change',event=>{
   const input=event.target;
-  if(input.type!=='range' || state.busy) return;
-  const {key,area}=input.dataset, value=(area?state.rules.areas:state.rules[key])[Number(input.value)].id;
-  if(area) state.labels.q1[area]=value; else state.labels[key]=value;
-  changed(`input[data-key="${key}"]${area?`[data-area="${area}"]`:''}`);
+  if(input.type!=='range' || input.disabled || state.busy) return;
+  const {key,area,group}=input.dataset;
+  const options=group?state.rules.q3.find(o=>o.id===group).options:area?state.rules.areas:state.rules[key];
+  const value=options[Number(input.value)].id;
+  if(group) CCMForm.toggleDetail(state.labels,group,value);
+  else if(area) state.labels.q1[area]=value; else state.labels[key]=value;
+  changed(`input[data-key="${key}"]${area?`[data-area="${area}"]`:group?`[data-group="${group}"]`:''}`);
 });
 $('#questions').addEventListener('keydown',event=>{
   // Enter/Space explicitly choose the current range position, including an unset first slot.

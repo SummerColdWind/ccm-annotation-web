@@ -28,7 +28,8 @@
     reconcile(labels);
   }
   function toggleDetail(labels, group, value) {
-    if(!applicable(labels) || !labels.q3.includes(group)) return;
+    if(!applicable(labels)) return;
+    if(!labels.q3.includes(group)) toggleInterference(labels,group);
     if(group==='e') {
       const current = labels.q3_details.e || [];
       labels.q3_details.e = current.includes(value) ? current.filter(x=>x!==value) : [...current,value];
