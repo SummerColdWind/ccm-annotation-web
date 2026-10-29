@@ -40,7 +40,7 @@
     if(!keys.length) return 'Q1 · 请至少选择一个层面或区域';
     if(keys.length>1 && Object.values(labels.q1).some(v=>!v)) return 'Q1 · 请为每个所选层面指定面积';
     if(!applicable(labels)) return '';
-    if(!['a','b','c'].includes(labels.q2)) return 'Q2 · 请选择优、良或差';
+    if(!['a','b','c'].includes(labels.q2)) return 'Q2 · 请选择良、中或差';
     if(!labels.q3?.length) return 'Q3 · 请选择干扰因素或“不适用”';
     if(labels.q3.includes('e') && !labels.q3_details.e?.length) return 'Q3 · 请选择重叠的细胞类型，可多选';
     if(labels.q3.includes('f') && !labels.q3_details.f) return 'Q3 · 请选择免疫细胞数量';

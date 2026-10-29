@@ -1,4 +1,4 @@
-"""Subset the OFL-licensed font for the UI/manual; requires fonttools[woff]."""
+"""Subset the OFL-licensed font for the UI and rules; requires fonttools[woff]."""
 from pathlib import Path
 import argparse
 from fontTools import subset

@@ -66,7 +66,7 @@ function loadTask(task) {
 }
 function slotControl(key, options, value, disabled=false, area=null) {
   const index=options.findIndex(x=>x.id===value);
-  const title=area?`${state.rules.layers.find(l=>l.id===area).name}面积`:'Q2 SBNP 整体可判读性';
+  const title=area?`${state.rules.layers.find(l=>l.id===area).name}面积`:'Q2 SBNP 可追踪性';
   return `<div class="slot-control ${disabled?'disabled':''} ${index<0?'unset':''}" style="--slots:${options.length}"><div class="slot-track"><input type="range" min="0" max="${options.length-1}" step="1" value="${Math.max(0,index)}" data-key="${key}" ${area?`data-area="${area}"`:''} aria-label="${esc(title)}" aria-valuetext="${index<0?'待选择':esc(options[index].name)}" ${disabled?'disabled':''}><div class="slot-dots" aria-hidden="true">${options.map((_,i)=>`<i style="--stop:${i}" class="${i===index?'chosen':''}"></i>`).join('')}</div></div><div class="slot-labels">${options.map(o=>`<button type="button" data-slot="${o.id}" data-key="${key}" ${area?`data-area="${area}"`:''} class="${value===o.id?'selected':''}" ${disabled?'disabled':''} aria-label="${esc(title+'：'+o.name+(o.detail?' '+o.detail:''))}" aria-pressed="${value===o.id}"><strong>${esc(o.name)}</strong>${o.detail?`<small>${esc(o.detail)}</small>`:''}</button>`).join('')}</div></div>`;
 }
 function renderQuestions() {
@@ -86,8 +86,8 @@ function renderQuestions() {
     <div class="layer-list">${rules.layers.map(layer=>{const selected=layer.id in labels.q1;return `<div class="layer-row ${selected?'selected':''}"><button type="button" class="choice ${selected?'selected':''}" data-layer="${layer.id}" aria-pressed="${selected}" title="${esc(layer.hint)}">${esc(layer.name)}</button>${slotControl('q1',rules.areas,labels.q1[layer.id],!selected || keys.length<2,layer.id)}</div>`;}).join('')}</div>
   </section>
   <section class="question grade-question q2-question ${disabled?'disabled':''}">
-    <div class="question-title"><span class="q-number">Q2</span><h2>SBNP 整体可判读性</h2><small>${disabled?'不适用':'单选'}</small></div>
-    <div class="grade-box">${slotControl('q2',rules.q2,labels.q2,disabled)}<p class="grade-hint">${disabled?skipped:esc(rules.q2.find(x=>x.id===labels.q2)?.hint || '先判断整体对比度与明显干扰，再判断神经主干能否可靠追踪。')}</p></div>
+    <div class="question-title"><span class="q-number">Q2</span><h2>SBNP 可追踪性</h2><small>${disabled?'不适用':'单选'}</small></div>
+    <div class="grade-box">${slotControl('q2',rules.q2,labels.q2,disabled)}<p class="grade-hint">${disabled?skipped:esc(rules.q2.find(x=>x.id===labels.q2)?.hint || '根据整体对比度、干扰范围及神经能否可靠追踪，选择良、中或差。')}</p></div>
   </section>
   <section class="question q3-question ${disabled?'disabled':''}">
     <div class="question-title"><span class="q-number">Q3</span><h2>影响神经追踪的干扰因素</h2><small>${disabled?'不适用':'多选'}</small></div>

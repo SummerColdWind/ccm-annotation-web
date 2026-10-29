@@ -285,7 +285,10 @@ def test_rules_and_removed_manual_routes(env):
     client=env['clients']['alice']
     rules=client.get('/api/rules').json()
     assert rules['version']==MANUAL_VERSION and 'q4' not in rules
-    assert [o['name'] for o in rules['q2']]==['优','良','差']
+    assert rules['version']=='20261029-r2'
+    assert [o['name'] for o in rules['q2']]==['良','中','差']
+    immune=next(o for o in rules['q3'] if o['id']=='f')
+    assert [o['detail'] for o in immune['options']]==['<20个','≥20个']
     assert [o['id'] for o in rules['q3']]==list('abcdefg')+['n']
     assert client.get('/api/manual').status_code==404
     assert client.get('/manual/images/Q1/a/R0200.png').status_code==404
@@ -294,15 +297,17 @@ def test_rules_and_removed_manual_routes(env):
     assert client.get('/api/health').json()['manual_version']==MANUAL_VERSION
 
 
-def test_old_drafts_are_not_reinterpreted_and_old_clients_cannot_write(env):
+@pytest.mark.parametrize('draft_version', [None,'20261029'])
+def test_old_drafts_are_not_reinterpreted_and_old_clients_cannot_write(env, draft_version):
     activate(env); client=env['clients']['alice']; task=next_task(client)
-    old={'q1':{'a':'k'},'q2':'c','q3':'b','q4':['n']}
+    old={'q1':{'a':'k'},'q2':'c','q3':'b','q4':['n']} if draft_version is None else {
+        'q1':{'a':None},'q2':'b','q3':['f'],'q3_details':{'f':'f2'}}
     with connect(env['db']) as db:
-        db.execute('UPDATE assignments SET draft=?,draft_version=NULL,revision=7 WHERE id=?',(json.dumps(old),task['id']))
+        db.execute('UPDATE assignments SET draft=?,draft_version=?,revision=7 WHERE id=?',(json.dumps(old),draft_version,task['id']))
     current=next_task(client)
     assert current['draft_reset'] and not current['has_draft'] and current['revision']==7
     assert current['labels']=={'q1':{},'q2':None,'q3':[],'q3_details':{}}
-    for version in (None,'20261027'):
+    for version in (None,'20261027','20261029'):
         body={'labels':VALID,'revision':7,'manual_version':version}
         assert client.put(f"/api/tasks/{task['id']}/draft",json=body).status_code==409
         assert client.post(f"/api/tasks/{task['id']}/submit",json=body).status_code==409
@@ -321,15 +326,25 @@ def test_legacy_schema_adds_draft_version_without_losing_accounts(tmp_path, hash
         assert db.execute('SELECT username FROM users').fetchone()[0]=='kept'
 
 
-def test_legacy_formal_record_is_preserved_for_export(env):
+@pytest.mark.parametrize('version,old,expected', [
+    ('20261027',{'q1':{'a':'k'},'q2':'c','q3':'d','q4':['b']},{'q2':'c','q3':'d','q4':'b'}),
+    ('20261029',{'q1':{'a':None},'q2':'b','q3':['e','f'],'q3_details':{'e':['e1','e2'],'f':'f2'}},
+     {'q2':'b','q3':'e;f','q3_overlap':'e1;e2','q3_immune':'f2'}),
+])
+def test_legacy_formal_record_is_preserved_for_export(env, version, old, expected):
     did=activate(env); client=env['clients']['alice']; task=next_task(client)
-    old={'q1':{'a':'k'},'q2':'c','q3':'d','q4':['b']}
     with connect(env['db']) as db:
-        db.execute('INSERT INTO annotations(assignment_id,labels,manual_version) VALUES(?,?,?)',(task['id'],json.dumps(old),'20261027'))
+        db.execute('INSERT INTO annotations(assignment_id,labels,manual_version) VALUES(?,?,?)',(task['id'],json.dumps(old),version))
+        db.execute('INSERT INTO annotation_audit(assignment_id,labels,manual_version,revision) VALUES(?,?,?,?)',(task['id'],json.dumps(old),version,0))
     assert client.get(f"/api/tasks/{task['id']}").status_code==409
     assert submit(client,task).status_code==409
     assert submit(client,next_task(client)).status_code==200
     records=[json.loads(line) for line in env['clients']['admin'].get(f'/api/admin/export?dataset_id={did}&format=jsonl').text.splitlines()]
-    legacy=next(r for r in records if r['manual_version']=='20261027')
-    assert legacy['q2']=='c' and legacy['q3']=='d' and legacy['q4']=='b'
+    legacy=next(r for r in records if r['manual_version']==version)
+    assert {key:legacy[key] for key in expected}==expected
+    if version=='20261029':
+        assert 'q4' not in legacy
+    audit=[json.loads(line) for line in env['clients']['admin'].get(f'/api/admin/export?dataset_id={did}&format=audit').text.splitlines()]
+    legacy_audit=next(r for r in audit if r['manual_version']==version)
+    assert {key:legacy_audit[key] for key in expected}==expected
     assert env['clients']['admin'].get(f'/api/admin/export?dataset_id={did}').status_code==200

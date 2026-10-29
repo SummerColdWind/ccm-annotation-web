@@ -342,7 +342,8 @@ def create_app(db_path=None, image_root=None, secure_cookie=None):
             record.update({f"q1_{k}": labels["q1"].get(k) or "" for k in "abcd"})
             record["q2"] = labels["q2"]
             record["q3"] = ";".join(labels["q3"]) if isinstance(labels["q3"], list) else labels["q3"] or ""
-            if record["manual_version"] == MANUAL_VERSION:
+            if "q3_details" in labels:
+                # Both three-question revisions retain their own grade/threshold meanings.
                 record["q3_overlap"] = ";".join(labels["q3_details"].get("e", []))
                 record["q3_immune"] = labels["q3_details"].get("f") or ""
             else:
