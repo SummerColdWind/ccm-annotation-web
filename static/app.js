@@ -63,35 +63,37 @@ function loadTask(task) {
 }
 function slotControl(key, options, value, disabled=false, area=null, group=null) {
   const index=options.findIndex(x=>x.id===value);
-  const title=area?`${state.rules.layers.find(l=>l.id===area).name}面积`:group?`Q3 ${state.rules.q3.find(o=>o.id===group).name}数量`:'Q2 SBNP 可追踪性';
+  const title=area?`${state.rules.layers.find(l=>l.id===area).name}面积`:group?`Q4 ${state.rules.q4.find(o=>o.id===group).name}`:key==='q3'?'Q3 免疫细胞分布':'Q2 SBNP 可追踪性';
   const scope=area?`data-area="${area}"`:group?`data-group="${group}"`:'';
   return `<div class="slot-control ${disabled?'disabled':''} ${index<0?'unset':''}" style="--slots:${options.length}"><div class="slot-track"><input type="range" min="0" max="${options.length-1}" step="1" value="${Math.max(0,index)}" data-key="${key}" ${scope} aria-label="${esc(title)}" aria-valuetext="${index<0?'待选择':esc(options[index].name+(options[index].detail?' '+options[index].detail:''))}" ${disabled?'disabled':''}><div class="slot-dots" aria-hidden="true">${options.map((_,i)=>`<i style="--stop:${i}" class="${i===index?'chosen':''}"></i>`).join('')}</div></div><div class="slot-labels">${options.map(o=>`<button type="button" data-slot="${o.id}" data-key="${key}" ${scope} class="${value===o.id?'selected':''}" ${disabled?'disabled':''} aria-label="${esc(title+'：'+o.name+(o.detail?' '+o.detail:''))}" aria-pressed="${value===o.id}"><strong>${esc(o.name)}</strong>${o.detail?`<small>${esc(o.detail)}</small>`:''}</button>`).join('')}</div></div>`;
 }
 function renderQuestions() {
   const labels=state.labels, rules=state.rules, keys=Object.keys(labels.q1), applicable=CCMForm.applicable(labels);
-  const disabled=!applicable, interference=labels.q3 || [];
+  const disabled=!applicable, interference=labels.q4 || [];
   const skipped=keys.length?'已跳过 · Q1 包含非 SBNP 层面或区域':'先完成 Q1';
   const details=(option)=>{
     if(!option.options) return '';
-    const controls=option.multiple?option.options.map(sub=>{
-      const selected=(labels.q3_details[option.id] || []).includes(sub.id);
-      return `<button type="button" class="choice detail-choice ${selected?'selected':''}" data-detail="${sub.id}" data-group="${option.id}" aria-pressed="${selected}" ${disabled?'disabled':''}>${esc(sub.name)}</button>`;
-    }).join(''):slotControl('q3',option.options,labels.q3_details[option.id],disabled,null,option.id);
-    return `<div class="factor-controls" role="group" aria-label="${esc(option.name)}细分">${controls}</div>`;
+    const controls=slotControl('q4',option.options,labels.q4_details[option.id],disabled,null,option.id);
+    const hint=option.options.find(o=>o.id===labels.q4_details[option.id])?.hint || option.hint;
+    return `<div class="factor-controls" role="group" aria-label="${esc(option.name)}细分">${controls}</div><p class="factor-hint">${esc(hint)}</p>`;
   };
   $('#questions').innerHTML=`<section class="question q1-question">
     <div class="question-title"><span class="q-number">Q1</span><h2>图像中存在哪些层面或区域？</h2><small>多选</small></div>
-    <p class="question-note">与 SBNP 重叠的区域只计入 SBNP；选择多个层面时填写面积。</p>
+    <p class="question-note">选择多个层面或区域时，填写各自面积。</p>
     <div class="layer-list">${rules.layers.map(layer=>{const selected=layer.id in labels.q1;return `<div class="layer-row ${selected?'selected':''}"><button type="button" class="choice ${selected?'selected':''}" data-layer="${layer.id}" aria-pressed="${selected}" title="${esc(layer.hint)}">${esc(layer.name)}</button>${slotControl('q1',rules.areas,labels.q1[layer.id],!selected || keys.length<2,layer.id)}</div>`;}).join('')}</div>
   </section>
   <section class="question grade-question q2-question ${disabled?'disabled':''}">
     <div class="question-title"><span class="q-number">Q2</span><h2>SBNP 可追踪性</h2><small>${disabled?'不适用':'单选'}</small></div>
     <div class="grade-box">${slotControl('q2',rules.q2,labels.q2,disabled)}<p class="grade-hint">${disabled?skipped:esc(rules.q2.find(x=>x.id===labels.q2)?.hint || '根据整体对比度、干扰范围及神经能否可靠追踪，选择相应档位。')}</p></div>
   </section>
-  <section class="question q3-question ${disabled?'disabled':''}">
-    <div class="question-title"><span class="q-number">Q3</span><h2>影响神经追踪的干扰因素</h2><small>${disabled?'不适用':'多选'}</small></div>
+  <section class="question grade-question q3-question ${disabled?'disabled':''}">
+    <div class="question-title"><span class="q-number">Q3</span><h2>免疫细胞分布</h2><small>${disabled?'不适用':'单选'}</small></div>
+    <div class="grade-box">${slotControl('q3',rules.q3,labels.q3,disabled)}<p class="grade-hint">${disabled?skipped:esc(rules.q3.find(x=>x.id===labels.q3)?.hint || '少：<5 个；中：5–20 个且无局部聚集；多：>20 个，或局部聚集 >10 个。')}</p></div>
+  </section>
+  <section class="question q4-question ${disabled?'disabled':''}">
+    <div class="question-title"><span class="q-number">Q4</span><h2>影响神经追踪的其他因素</h2><small>${disabled?'不适用':'多选，可不选'}</small></div>
     ${disabled?`<p class="skip-note">${skipped}</p>`:''}
-    <div class="q3-grid">${rules.q3.map(o=>`<div class="factor-card ${o.options?'has-options':''} ${interference.includes(o.id)?'selected':''}"><button type="button" class="choice ${interference.includes(o.id)?'selected':''}" data-interference="${o.id}" aria-pressed="${interference.includes(o.id)}" title="${esc(o.hint)}" ${disabled?'disabled':''}>${esc(o.name)}</button>${details(o)}</div>`).join('')}</div>
+    <div class="factor-grid">${rules.q4.map(o=>`<div class="factor-card ${o.options?'has-options':''} ${interference.includes(o.id)?'selected':''}"><button type="button" class="choice ${interference.includes(o.id)?'selected':''}" data-interference="${o.id}" aria-pressed="${interference.includes(o.id)}" title="${esc(o.hint)}" ${disabled?'disabled':''}>${esc(o.name)}</button>${details(o)}</div>`).join('')}</div>
   </section>`;
 }
 function formProblem() {
@@ -103,7 +105,7 @@ function updateSubmit() {
   $('#previous-task').disabled=state.busy || !state.task?.previous_id;
   $('#previous-empty').hidden=!state.completedPreviousId;
   $('#previous-empty').disabled=state.busy;
-  $('#validation-hint').textContent=problem || (state.task?.submitted?'修改后将保留历史版本':CCMForm.applicable(state.labels)?'三步已完成，可以提交':'后续问题已跳过，可以提交');
+  $('#validation-hint').textContent=problem || (state.task?.submitted?'修改后将保留历史版本':CCMForm.applicable(state.labels)?'可以提交':'后续问题已跳过，可以提交');
   $('#submit').innerHTML=state.busy?'处理中…':'保存并下一张 <span>→</span>';
 }
 function setBusy(busy) {
@@ -166,17 +168,13 @@ $('#questions').addEventListener('click',event=>{
     const value=button.dataset.interference;
     CCMForm.toggleInterference(state.labels,value);
     changed(`[data-interference="${value}"]`);
-  } else if(button.dataset.detail) {
-    const {group,detail}=button.dataset;
-    CCMForm.toggleDetail(state.labels,group,detail);
-    changed(`[data-detail="${detail}"]`);
   }
 });
 $('#questions').addEventListener('change',event=>{
   const input=event.target;
   if(input.type!=='range' || input.disabled || state.busy) return;
   const {key,area,group}=input.dataset;
-  const options=group?state.rules.q3.find(o=>o.id===group).options:area?state.rules.areas:state.rules[key];
+  const options=group?state.rules.q4.find(o=>o.id===group).options:area?state.rules.areas:state.rules[key];
   const value=options[Number(input.value)].id;
   if(group) CCMForm.toggleDetail(state.labels,group,value);
   else if(area) state.labels.q1[area]=value; else state.labels[key]=value;

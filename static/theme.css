@@ -132,10 +132,10 @@ progress::-moz-progress-bar { background:#638c57; }
 .grade-question.disabled .question-title h2 { color:#7b6d53; }
 .grade-question.disabled .grade-box { background:#e7e0cf88; padding:4px; border-radius:4px; }
 .q3-question { padding:12px 0 12px; }
-.q3-grid { grid-template-columns:1fr 1fr; gap:6px 8px; }
-.q3-grid .choice { min-height:39px; padding:6px 10px; gap:10px; border:1px solid #cebd9b; border-bottom:2px solid #ccb892; border-radius:4px; background:#fff8e8a6; color:#44301e; font-size:15px; font-weight:400; line-height:1.4; }
-.q3-grid .choice:before { width:20px; height:20px; }
-.q3-grid .choice.selected { background:#e0ebca; border-color:#8aa46c; border-bottom-color:#718d55; color:#2e4726; }
+.factor-grid { grid-template-columns:1fr 1fr; gap:6px 8px; }
+.factor-grid .choice { min-height:39px; padding:6px 10px; gap:10px; border:1px solid #cebd9b; border-bottom:2px solid #ccb892; border-radius:4px; background:#fff8e8a6; color:#44301e; font-size:15px; font-weight:400; line-height:1.4; }
+.factor-grid .choice:before { width:20px; height:20px; }
+.factor-grid .choice.selected { background:#e0ebca; border-color:#8aa46c; border-bottom-color:#718d55; color:#2e4726; }
 .choice:hover,.layer-row:hover { border-color:#a28a5a; }
 .layer-row.selected:hover { border-color:#5c7b45; }
 .submit-bar { min-height:65px; padding:11px 20px; gap:16px; border:0; background:none; }
@@ -170,7 +170,7 @@ progress::-moz-progress-bar { background:#638c57; }
   .layer-row .choice { font-size:18px; }
   .question-title h2 { font-size:18px; }
   .grade-question .question-title h2 { font-size:17px; }
-  .q3-grid .choice { font-size:16px; min-height:42px; }
+  .factor-grid .choice { font-size:16px; min-height:42px; }
   .slot-labels button strong { font-size:14px; }
 }
 @media(max-width:1350px) and (min-width:851px) {
@@ -190,7 +190,7 @@ progress::-moz-progress-bar { background:#638c57; }
   .question-title h2 { font-size:15px; }
   .grade-question .question-title h2,.grade-question .q-number { font-size:13px; }
   .grade-question .slot-labels button strong { font-size:11px; }
-  .q3-grid .choice { font-size:12px; padding:6px 8px; }
+  .factor-grid .choice { font-size:12px; padding:6px 8px; }
   .image-tools { gap:9px; }
   .image-tools>div { gap:5px; }
   .image-tools>div+div { padding-left:8px; }
@@ -205,7 +205,7 @@ progress::-moz-progress-bar { background:#638c57; }
   .layer-row .choice { font-size:12px; }
   .slot-labels button strong,.slot-labels button small { display:block; }
   .slot-labels button small:before { content:''; }
-  .q3-grid .choice { font-size:11px; }
+  .factor-grid .choice { font-size:11px; }
   .grade-question .slot-labels button strong { font-size:10px; }
   .choice:before { width:18px; height:18px; }
   .submit-bar { padding:11px 15px; }
@@ -232,7 +232,7 @@ progress::-moz-progress-bar { background:#638c57; }
   .question-title h2 { font-size:17px; }
   .layer-row .choice { font-size:16px; }
   .grade-question .question-title h2 { font-size:15px; }
-  .q3-grid .choice { font-size:15px; }
+  .factor-grid .choice { font-size:15px; }
   .panel-title { font-size:21px; }
 }
 @media(max-width:580px) {
@@ -292,9 +292,9 @@ progress::-moz-progress-bar { background:#638c57; }
   .grade-question .question-title h2,.grade-question .q-number { font-size:11px; }
   .grade-question .slot-labels button strong { font-size:9px; }
   .grade-hint { font-size:9px; min-height:39px; }
-  .q3-grid { gap:6px; }
-  .q3-grid .choice { font-size:11px; padding:6px; min-height:38px; gap:6px; }
-  .q3-grid .choice:before { width:16px; height:16px; }
+  .factor-grid { gap:6px; }
+  .factor-grid .choice { font-size:11px; padding:6px; min-height:38px; gap:6px; }
+  .factor-grid .choice:before { width:16px; height:16px; }
   .submit-bar { min-height:62px; padding:11px; gap:8px; }
   .submit-bar>div { font-size:11px; }
   .submit-bar small { font-size:9px; }
@@ -319,29 +319,30 @@ progress::-moz-progress-bar { background:#638c57; }
 @media(min-width:1201px){.layer-row{min-height:66px}}
 @media(max-width:580px){.panel:before{inset:-19px}.panel-title{min-height:45px}.submit-bar{min-height:60px}.layer-row{min-height:63px}}
 
-/* Three-question form, rules revision 20261029. */
+/* Four-question form, rules revision 20261030. */
 .q1-question>.question-note { display:block; font-size:12px; line-height:1.55; color:#665036; margin:0 0 9px; }
-.q2-question .grade-box { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.25fr); align-items:center; gap:22px; }
-.q2-question .grade-hint { margin:0; min-height:0; font-size:12px; color:#654f35; }
-.q2-question .slot-labels button strong { font-size:15px; }
-.q3-grid { display:grid; grid-template-columns:1fr 1fr; align-items:stretch; gap:8px; }
-.q3-grid>.factor-card>.choice { width:100%; min-height:42px; }
+.grade-question .grade-box { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.25fr); align-items:center; gap:22px; }
+.grade-question .grade-hint { margin:0; min-height:0; font-size:12px; color:#654f35; }
+.grade-question .slot-labels button strong { font-size:15px; }
+.factor-grid { display:grid; grid-template-columns:1fr 1fr; align-items:stretch; gap:8px; }
+.factor-grid>.factor-card>.choice { width:100%; min-height:42px; }
+.factor-hint { margin:0 10px 10px; min-height:3.1em; font-size:11px; line-height:1.55; color:#654f35; }
 .factor-card.selected { background:#e5edcf; border-radius:4px; }
 .factor-card.has-options { display:flex; flex-direction:column; min-width:0; border:1px solid #cebd9b; border-bottom:2px solid #ccb892; border-radius:4px; background:#fff8e8a6; }
 .factor-card.has-options.selected { background:#e0ebca; border-color:#8aa46c; border-bottom-color:#718d55; }
-.q3-grid>.factor-card.has-options>.choice { border:0; background:none; box-shadow:none; }
+.factor-grid>.factor-card.has-options>.choice { border:0; background:none; box-shadow:none; }
 .factor-controls { display:flex; align-items:center; gap:7px; padding:0 10px 10px; flex:1; min-height:67px; }
 .factor-controls>.slot-control { width:100%; }
-.q3-grid .detail-choice { flex:1; justify-content:center; font-size:13px; min-height:36px; padding:5px 7px; gap:5px; }
-.q3-grid .detail-choice:before { width:16px; height:16px; font-size:12px; line-height:13px; }
+.factor-grid .detail-choice { flex:1; justify-content:center; font-size:13px; min-height:36px; padding:5px 7px; gap:5px; }
+.factor-grid .detail-choice:before { width:16px; height:16px; font-size:12px; line-height:13px; }
 .factor-controls .slot-labels { display:grid; grid-template-columns:repeat(var(--slots),minmax(0,1fr)); gap:4px; }
 .factor-controls .slot-labels button { white-space:normal; }
 .factor-controls .slot-labels button strong { display:block; font-size:11px; line-height:1.5; }
 .factor-controls .slot-labels button small { display:block; font-size:11px; }
 .factor-controls .slot-labels button small:before { content:''; }
-.q3-question.disabled .factor-card.has-options { background:#ece6d7; border-color:#cec3ac; }
-.q3-question.disabled .choice { opacity:1; background:#ece6d7; color:#7e7360; border-color:#cec3ac; }
-.q3-question.disabled .choice:before { background:#ddd7c9; border-color:#aaa18e; }
+.q4-question.disabled .factor-card.has-options { background:#ece6d7; border-color:#cec3ac; }
+.q4-question.disabled .choice { opacity:1; background:#ece6d7; color:#7e7360; border-color:#cec3ac; }
+.q4-question.disabled .choice:before { background:#ddd7c9; border-color:#aaa18e; }
 .submit-bar { flex-wrap:wrap; }
 .submit-bar .save-feedback { flex:1 1 145px; }
 .task-actions { display:flex; align-items:center; gap:10px; margin-left:auto; }
@@ -353,11 +354,11 @@ progress::-moz-progress-bar { background:#638c57; }
   .task-actions { width:100%; justify-content:space-between; }
   #previous-task { font-size:12px; min-height:38px; }
   .q1-question>.question-note,.skip-note { font-size:10px; }
-  .q2-question .grade-box { grid-template-columns:1fr; gap:8px; }
-  .q2-question .grade-hint { font-size:10px; }
-  .q2-question .slot-labels button strong { font-size:12px; }
-  .q3-grid>.factor-card>.choice { font-size:11px; min-height:40px; }
+  .grade-question .grade-box { grid-template-columns:1fr; gap:8px; }
+  .grade-question .grade-hint { font-size:10px; }
+  .grade-question .slot-labels button strong { font-size:12px; }
+  .factor-grid>.factor-card>.choice { font-size:11px; min-height:40px; }
   .factor-card.has-options { grid-column:1 / -1; }
-  .q3-grid .detail-choice { font-size:12px; min-height:34px; }
+  .factor-grid .detail-choice { font-size:12px; min-height:34px; }
   .factor-controls { padding:0 9px 9px; min-height:64px; }
 }

@@ -7,13 +7,14 @@
     if(keys.length === 1) labels.q1[keys[0]] = null;
     if(!applicable(labels)) {
       labels.q2 = keys.length ? 'n' : null;
-      labels.q3 = keys.length ? null : [];
-      labels.q3_details = {};
+      labels.q3 = null;
+      labels.q4 = keys.length ? null : [];
+      labels.q4_details = {};
     } else {
       if(labels.q2 === 'n') labels.q2 = null;
-      labels.q3 ??= [];
-      labels.q3_details ??= {};
-      for(const key of ['e','f']) if(!labels.q3.includes(key)) delete labels.q3_details[key];
+      labels.q4 ??= [];
+      labels.q4_details ??= {};
+      if(!labels.q4.includes('c')) delete labels.q4_details.c;
     }
     return labels;
   }
@@ -23,17 +24,13 @@
   }
   function toggleInterference(labels, key) {
     if(!applicable(labels)) return;
-    const selected = labels.q3.includes(key);
-    labels.q3 = selected ? labels.q3.filter(x=>x!==key) : key==='n' ? ['n'] : [...labels.q3.filter(x=>x!=='n'),key];
+    labels.q4 = labels.q4.includes(key) ? labels.q4.filter(x=>x!==key) : [...labels.q4,key];
     reconcile(labels);
   }
   function toggleDetail(labels, group, value) {
     if(!applicable(labels)) return;
-    if(!labels.q3.includes(group)) toggleInterference(labels,group);
-    if(group==='e') {
-      const current = labels.q3_details.e || [];
-      labels.q3_details.e = current.includes(value) ? current.filter(x=>x!==value) : [...current,value];
-    } else if(group==='f') labels.q3_details.f = value;
+    if(!labels.q4.includes(group)) toggleInterference(labels,group);
+    labels.q4_details[group] = value;
   }
   function problem(labels) {
     if(!labels) return '等待图像';
@@ -42,9 +39,8 @@
     if(keys.length>1 && Object.values(labels.q1).some(v=>!v)) return 'Q1 · 请为每个所选层面指定面积';
     if(!applicable(labels)) return '';
     if(!['a','b','c'].includes(labels.q2)) return 'Q2 · 请选择良、中或差';
-    if(!labels.q3?.length) return 'Q3 · 请选择干扰因素或“不适用”';
-    if(labels.q3.includes('e') && !labels.q3_details.e?.length) return 'Q3 · 请选择重叠的细胞类型，可多选';
-    if(labels.q3.includes('f') && !labels.q3_details.f) return 'Q3 · 请选择免疫细胞数量';
+    if(!['a','b','c'].includes(labels.q3)) return 'Q3 · 请选择免疫细胞分布：少、中或多';
+    if(labels.q4.includes('c') && !['c1','c2','c3'].includes(labels.q4_details.c)) return 'Q4 · 请选择偏亮、偏暗或显著偏暗';
     return '';
   }
   const api = {applicable,reconcile,toggleLayer,toggleInterference,toggleDetail,problem};

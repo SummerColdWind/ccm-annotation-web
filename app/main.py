@@ -15,11 +15,11 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image, UnidentifiedImageError
 
 from .db import connect, default_db, initialize, password_hash, verify_password
-from .rules import AREAS, LAYERS, MANUAL_VERSION, Q2, Q3, normalize
+from .rules import AREAS, LAYERS, MANUAL_VERSION, Q2, Q3, Q4, normalize
 
 BASE = Path(__file__).resolve().parents[1]
 EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
-EMPTY = {"q1": {}, "q2": None, "q3": [], "q3_details": {}}
+EMPTY = {"q1": {}, "q2": None, "q3": None, "q4": [], "q4_details": {}}
 
 
 def create_app(db_path=None, image_root=None, secure_cookie=None):
@@ -159,7 +159,7 @@ def create_app(db_path=None, image_root=None, secure_cookie=None):
 
     @app.get("/api/rules")
     def rules(current=Depends(user)):
-        return {"version": MANUAL_VERSION, "layers": LAYERS, "areas": AREAS, "q2": Q2, "q3": Q3}
+        return {"version": MANUAL_VERSION, "layers": LAYERS, "areas": AREAS, "q2": Q2, "q3": Q3, "q4": Q4}
 
     @app.get("/api/progress")
     def progress(current=Depends(user)):
@@ -359,8 +359,11 @@ def create_app(db_path=None, image_root=None, secure_cookie=None):
             record.update({f"q1_{k}": labels["q1"].get(k) or "" for k in "abcd"})
             record["q2"] = labels["q2"]
             record["q3"] = ";".join(labels["q3"]) if isinstance(labels["q3"], list) else labels["q3"] or ""
-            if "q3_details" in labels:
-                # Both three-question revisions retain their own grade/threshold meanings.
+            if "q4_details" in labels:
+                record["q4"] = ";".join(labels["q4"] or [])
+                record["q4_brightness"] = labels["q4_details"].get("c") or ""
+            elif "q3_details" in labels:
+                # Three-question revisions retain their own grade/threshold meanings.
                 record["q3_overlap"] = ";".join(labels["q3_details"].get("e", []))
                 record["q3_immune"] = labels["q3_details"].get("f") or ""
             else:
@@ -369,7 +372,7 @@ def create_app(db_path=None, image_root=None, secure_cookie=None):
             data.append(record)
         if format == "csv":
             stream = io.StringIO(newline="")
-            fields = list(dict.fromkeys(k for record in data for k in record)) if data else ["dataset","username","display_name","image_id","relpath","sha256","presentation_order","manual_version","submitted_at","updated_at","q1_layers","q1_a","q1_b","q1_c","q1_d","q2","q3","q3_overlap","q3_immune"]
+            fields = list(dict.fromkeys(k for record in data for k in record)) if data else ["dataset","username","display_name","image_id","relpath","sha256","presentation_order","manual_version","submitted_at","updated_at","q1_layers","q1_a","q1_b","q1_c","q1_d","q2","q3","q4","q4_brightness"]
             writer = csv.DictWriter(stream, fieldnames=fields)
             writer.writeheader()
             # Spreadsheet formula injection protection for user-controlled text.
